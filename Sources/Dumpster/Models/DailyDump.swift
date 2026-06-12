@@ -45,7 +45,7 @@ struct DumpBullet: Identifiable {
     var isRetired: Bool
     var rawLine: String
 
-    static let retiredMarker = " [retired]"
+    static let retiredMarker = " [acknowledged]"
 
     static func parse(from content: String) -> [DumpBullet] {
         content

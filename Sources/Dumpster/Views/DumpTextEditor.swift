@@ -118,7 +118,7 @@ struct DumpTextEditor: NSViewRepresentable {
                 case "save": color = NSColor(Theme.accent)
                 case "delete": color = NSColor.systemGray
                 case "resource": color = NSColor(Theme.accent)
-                default: color = NSColor(Theme.accent)
+                default: color = NSColor.systemBlue
                 }
 
                 attrStr.addAttribute(.foregroundColor, value: color, range: tagRange)

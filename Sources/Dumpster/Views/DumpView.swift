@@ -150,7 +150,7 @@ struct DumpView: View {
                 .padding(.trailing, 8)
 
             Group {
-                magicTagLabel("#action", color: Theme.actionColor)
+                magicTagLabel("#action", color: Theme.successColor)
                 separator
                 magicTagLabel("#prio", color: Color.red)
                 separator
