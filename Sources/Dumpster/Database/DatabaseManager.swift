@@ -102,6 +102,12 @@ final class DatabaseManager: Sendable {
             try db.create(index: "idx_links_to", on: "item_links", columns: ["toItemId"])
         }
 
+        migrator.registerMigration("v2_incorporatedIntoDoc") { db in
+            try db.alter(table: "items") { t in
+                t.add(column: "incorporatedIntoDoc", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return migrator
     }
 }

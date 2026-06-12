@@ -878,6 +878,15 @@ struct DumpView: View {
     private func saveDraft() {
         guard let dump = todayDump else { return }
         try? Queries.updateDumpContent(id: dump.id, content: content)
+        ensureTagsRegistered()
+    }
+
+    private func ensureTagsRegistered() {
+        let bullets = DumpBullet.parse(from: content)
+        let allTags = Set(bullets.flatMap { $0.tags })
+        for tagName in allTags {
+            _ = try? Queries.getOrCreateTag(name: tagName)
+        }
     }
 
     private func reload() {
@@ -915,6 +924,7 @@ struct MasterDocPanelView: View {
     @State private var showEmptyDocPrompt = false
     @State private var pendingBullets: [String] = []
     @State private var showSubTagSettings = false
+    @StateObject private var editorHandle = RichMarkdownEditorHandle()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -940,10 +950,7 @@ struct MasterDocPanelView: View {
 
             // Editor with drop zone
             ZStack {
-                TextEditor(text: $content)
-                    .font(.inter(fontSize))
-                    .scrollContentBackground(.hidden)
-                    .padding(12)
+                RichMarkdownEditorWithHandle(markdown: $content, handle: editorHandle, fontSize: fontSize)
                     .onChange(of: content) { saveDoc() }
                     .opacity(highlightInsertions ? 0.85 : 1.0)
                     .allowsHitTesting(!isDragOver)
@@ -1041,10 +1048,10 @@ struct MasterDocPanelView: View {
 
     private var panelToolbar: some View {
         HStack(spacing: 2) {
-            toolbarBtn(icon: "bold") { content += "**text**" }
-            toolbarBtn(icon: "italic") { content += "*text*" }
-            toolbarBtn(icon: "list.bullet") { insertLine("• ") }
-            toolbarBtn(icon: "number") { insertLine("## ") }
+            toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
+            toolbarBtn(icon: "italic") { /* placeholder */ }
+            toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
+            toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
             Divider().frame(height: 14).padding(.horizontal, 4)
             toolbarBtn(icon: "textformat.size.smaller") { if fontSize > 10 { fontSize -= 1 } }
             Text("\(Int(fontSize))").font(.inter(9)).foregroundStyle(Theme.textMuted).frame(width: 16)
@@ -1203,14 +1210,6 @@ struct MasterDocPanelView: View {
             } catch {
                 await MainActor.run { isSynthesizing = false }
             }
-        }
-    }
-
-    private func insertLine(_ prefix: String) {
-        if content.isEmpty || content.hasSuffix("\n") {
-            content += prefix
-        } else {
-            content += "\n\(prefix)"
         }
     }
 

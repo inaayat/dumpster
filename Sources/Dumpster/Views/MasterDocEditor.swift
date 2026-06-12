@@ -14,6 +14,7 @@ struct MasterDocEditor: View {
     @State private var fontSize: CGFloat = 13
     @State private var isDragOver = false
     @State private var confirmDelete = false
+    @StateObject private var editorHandle = RichMarkdownEditorHandle()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,10 +39,7 @@ struct MasterDocEditor: View {
             }
 
             ZStack {
-                TextEditor(text: $content)
-                    .font(.inter(fontSize))
-                    .scrollContentBackground(.hidden)
-                    .padding(12)
+                RichMarkdownEditorWithHandle(markdown: $content, handle: editorHandle, fontSize: fontSize)
                     .onChange(of: content) { saveDoc() }
 
                 if isDragOver {
@@ -60,9 +58,7 @@ struct MasterDocEditor: View {
             }
             .dropDestination(for: String.self) { dropped, _ in
                 isDragOver = false
-                let bullets = dropped.flatMap { $0.components(separatedBy: "\n") }.filter { !$0.isEmpty }
-                guard !bullets.isEmpty else { return false }
-                aiInsertBullets(bullets)
+                handleDrop(dropped)
                 return true
             } isTargeted: { targeted in
                 isDragOver = targeted
@@ -109,6 +105,15 @@ struct MasterDocEditor: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
+            HStack(spacing: 2) {
+                toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
+                toolbarBtn(icon: "italic") { /* placeholder */ }
+                toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
+                toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
+            }
+
+            Divider().frame(height: 14)
+
             Button { synthesize() } label: {
                 HStack(spacing: 4) {
                     if isSynthesizing { ProgressView().controlSize(.mini) }
@@ -140,6 +145,18 @@ struct MasterDocEditor: View {
     }
 
     @ViewBuilder
+    private func toolbarBtn(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
     private func synthesizePreviewSection(_ preview: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -161,6 +178,27 @@ struct MasterDocEditor: View {
         .background(Theme.accent.opacity(0.05))
     }
 
+    private func handleDrop(_ dropped: [String]) {
+        var itemId: String?
+        var bullets: [String] = []
+
+        for item in dropped {
+            if item.hasPrefix("itemdrag:") {
+                let parts = item.dropFirst("itemdrag:".count).components(separatedBy: ":")
+                if parts.count >= 2 {
+                    itemId = parts[0]
+                    let text = parts.dropFirst().joined(separator: ":")
+                    bullets.append(text)
+                }
+            } else {
+                bullets.append(contentsOf: item.components(separatedBy: "\n").filter { !$0.isEmpty })
+            }
+        }
+
+        guard !bullets.isEmpty else { return }
+        aiInsertBullets(bullets, itemId: itemId)
+    }
+
     private func synthesize() {
         isSynthesizing = true
         Task {
@@ -173,12 +211,19 @@ struct MasterDocEditor: View {
         }
     }
 
-    private func aiInsertBullets(_ bullets: [String]) {
+    private func aiInsertBullets(_ bullets: [String], itemId: String?) {
         isInserting = true
         Task {
             do {
                 let result = try await AIService.insertBulletsIntoDoc(existingContent: content, bullets: bullets)
-                await MainActor.run { content = result; saveDoc(); isInserting = false }
+                await MainActor.run {
+                    content = result
+                    saveDoc()
+                    isInserting = false
+                    if let itemId {
+                        try? Queries.markItemIncorporated(id: itemId)
+                    }
+                }
             } catch {
                 await MainActor.run { isInserting = false }
             }

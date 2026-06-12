@@ -39,6 +39,7 @@ struct Item: Identifiable, Codable, Equatable {
     var url: String?
     var urlTitle: String?
     var notes: String?
+    var incorporatedIntoDoc: Bool
     var createdAt: Date
 
     var isOverdue: Bool {
@@ -62,7 +63,7 @@ extension Item: FetchableRecord, PersistableRecord, TableRecord {
     static let databaseTableName = "items"
 
     enum Columns: String, ColumnExpression {
-        case id, text, category, priority, done, doneAt, dueDate, url, urlTitle, notes, createdAt
+        case id, text, category, priority, done, doneAt, dueDate, url, urlTitle, notes, incorporatedIntoDoc, createdAt
     }
 }
 
@@ -79,6 +80,7 @@ extension Item {
             url: url,
             urlTitle: urlTitle,
             notes: nil,
+            incorporatedIntoDoc: false,
             createdAt: Date()
         )
     }

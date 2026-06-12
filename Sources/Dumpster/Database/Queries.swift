@@ -70,6 +70,24 @@ struct Queries {
         }
     }
 
+    static func markItemIncorporated(id: String) throws {
+        try db.write { db in
+            try db.execute(
+                sql: "UPDATE items SET incorporatedIntoDoc = 1 WHERE id = ?",
+                arguments: [id]
+            )
+        }
+    }
+
+    static func unmarkItemIncorporated(id: String) throws {
+        try db.write { db in
+            try db.execute(
+                sql: "UPDATE items SET incorporatedIntoDoc = 0 WHERE id = ?",
+                arguments: [id]
+            )
+        }
+    }
+
     static func getOverdueAndDueToday() throws -> [Item] {
         let today = Calendar.current.startOfDay(for: Date())
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
