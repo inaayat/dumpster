@@ -38,26 +38,28 @@ struct ItemsView: View {
                     .onChange(of: groupByTag) { _, v in UserDefaults.standard.set(v, forKey: "items.groupByTag") }
 
                 if groupByTag {
-                    Button { withAnimation(.easeInOut(duration: 0.2)) { collapsedTags.removeAll() } } label: {
-                        Image(systemName: "arrow.down.right.and.arrow.up.left")
-                            .font(.system(size: 9))
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Expand all")
+                    let allGroupIds = Set(groupItemsByTag(excludeHighPrio: true).map(\.id))
+                    let allCollapsed = !allGroupIds.isEmpty && allGroupIds.isSubset(of: collapsedTags)
 
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            let groups = groupItemsByTag(excludeHighPrio: true)
-                            collapsedTags = Set(groups.map(\.id))
+                    if allCollapsed {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { collapsedTags.removeAll() }
+                        } label: {
+                            Text("Expand All")
+                                .font(.inter(10, weight: .medium))
+                                .foregroundStyle(Theme.accent)
                         }
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 9))
-                            .foregroundStyle(Theme.textMuted)
+                        .buttonStyle(.plain)
+                    } else {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { collapsedTags = allGroupIds }
+                        } label: {
+                            Text("Collapse All")
+                                .font(.inter(10, weight: .medium))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                    .help("Collapse all")
                 }
 
                 Toggle("Done", isOn: $showCompleted)
