@@ -11,7 +11,6 @@ struct DumpView: View {
     @State private var expandedPastDays: Set<String> = []
     @State private var searchTag: String? = nil
     @State private var tagFilter = ""
-    @State private var isUpdating = false
     @State private var showMergeConfirm = false
     @State private var mergeSource: String? = nil
     @State private var mergeTarget: String? = nil
@@ -299,14 +298,42 @@ struct DumpView: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $content)
                     .font(.inter(13))
+                    .lineSpacing(4)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 300)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(12)
                     .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
                     .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.border, lineWidth: 1))
-                    .onChange(of: content) { _, newValue in
-                        handleContentChange(newValue)
+                    .onChange(of: content) { oldValue, newValue in
+                        // Only transform when ADDING text (never on delete/backspace)
+                        guard newValue.count > oldValue.count else { saveDraft(); return }
+
+                        var updated = newValue
+
+                        // Replace * with • when typed at start of a line
+                        if updated.hasSuffix("* ") {
+                            let beforeStar = updated.dropLast(2)
+                            if beforeStar.isEmpty || beforeStar.last == "\n" {
+                                updated = String(beforeStar) + "• "
+                            }
+                        }
+
+                        // Enter pressed — add bullet on new line + process magic tags
+                        if updated.hasSuffix("\n") {
+                            let lines = updated.components(separatedBy: "\n")
+                            if lines.count >= 2 {
+                                let completedLine = lines[lines.count - 2]
+                                if !completedLine.trimmingCharacters(in: .whitespaces).isEmpty {
+                                    processMagicTags(line: completedLine)
+                                }
+                            }
+                            updated += "• "
+                        }
+
+                        if updated != newValue {
+                            content = updated
+                        }
                         saveDraft()
                     }
 
@@ -620,26 +647,6 @@ struct DumpView: View {
         content.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
     }
 
-    private func handleContentChange(_ newValue: String) {
-        guard !isUpdating else { return }
-        var updated = newValue
-
-        // Only act on Enter (newline at end)
-        if updated.hasSuffix("\n") && !updated.hasSuffix("\n\n") {
-            let lines = updated.components(separatedBy: "\n")
-            if lines.count >= 2 {
-                let completedLine = lines[lines.count - 2]
-                if !completedLine.trimmingCharacters(in: .whitespaces).isEmpty {
-                    processMagicTags(line: completedLine)
-                }
-            }
-            updated += "• "
-
-            isUpdating = true
-            content = updated
-            DispatchQueue.main.async { self.isUpdating = false }
-        }
-    }
 
     private func processMagicTags(line: String) {
         let bullet = DumpBullet.parse(from: line).first

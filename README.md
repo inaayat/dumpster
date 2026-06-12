@@ -10,6 +10,7 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 2. **Tag** — Use `#hashtags` inline to organize by topic.
 3. **Magic tags** — Special tags auto-create items on Enter:
    - `#action` → creates an action item
+   - `#prio` → makes it high priority (or creates high-prio action if used alone)
    - `#brainstorm` → creates a brainstorm item
    - `#win` → logs an achievement
    - `#save` → appends bullet to all tagged Master Docs
@@ -22,21 +23,25 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 ## Features
 
 ### Daily Dump (Home)
-- Freeform daily notepad with auto-bullet formatting
+- Freeform daily notepad with auto-bullet formatting (type `*` or press Enter for new bullet)
 - Magic tag processing on Enter — zero-click item creation
-- Attention bar showing overdue/due-today items
+- `#prio` tag creates high-priority actions instantly
+- Attention bar showing ALL high-priority + overdue items (always expanded)
 - Tag pills bar with search, merge, and sub-tag creation
 - "Analyze with AI" for batch extraction of items
 - Past days expandable with per-day AI analysis
+- Double-click bullets in tag search to edit inline
 
 ### Items View
 - Filter tabs: All / Actions / Brainstorms / Resources
-- "Group by tag" toggle — items organized under their tag headers
+- "Group by tag" toggle — items organized under their tag headers (high-prio always at top)
 - "High prio" filter toggle
 - "Completed" toggle
-- Clickable due dates with calendar popover
+- "New" section at top — recently created items float above everything regardless of filters
+- Clickable due dates with calendar popover (add or change dates inline)
 - Priority indicators
 - All preferences persist across restarts
+- Editing an item with #tags auto-strips tags from title and creates tag associations
 
 ### Tags
 - Primary organizational unit (replaces clusters)
@@ -47,10 +52,16 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 
 ### Master Docs
 - Per-topic persistent documents tied to tags
-- AI-powered drag-to-insert: drop bullets, AI places them in the right section
+- AI-powered drag-to-insert: drop bullets, AI places them in the right section with expanded insights
+- Empty doc prompt: "Create sections from AI?" vs "Just append as list?"
 - Batch selection: checkbox bullets → "Send to doc" → AI integrates
-- "In doc" indicators (green checkmark on processed bullets)
-- AI Synthesize: restructure the entire document
+- "In doc" indicators (green checkmark on processed bullets, sorted to bottom)
+- AI Synthesize: gathers ALL bullets with that tag from all dumps, restructures into clean doc
+- Synthesize preview with Accept/Dismiss before committing
+- Highlight flash after AI insertion so you can see what was added
+- Formatting toolbar: Bold, Italic, Bullet list, Heading, font size controls
+- Editable title field
+- Sub-tag settings (gear icon)
 - Accessible from tag search panel or Docs sidebar tab
 
 ### Wins
