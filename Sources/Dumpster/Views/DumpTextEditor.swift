@@ -118,12 +118,15 @@ struct DumpTextEditor: NSViewRepresentable {
                 case "save": color = NSColor(Theme.accent)
                 case "delete": color = NSColor.systemGray
                 case "resource": color = NSColor(Theme.accent)
-                default: color = NSColor.systemBlue
+                default: color = NSColor(red: 0.15, green: 0.3, blue: 0.65, alpha: 1.0)
                 }
 
                 attrStr.addAttribute(.foregroundColor, value: color, range: tagRange)
-                let boldFont = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
-                attrStr.addAttribute(.font, value: boldFont, range: tagRange)
+                let isMagicTag = ["action", "prio", "brainstorm", "win", "save", "delete", "resource"].contains(tagName)
+                if isMagicTag {
+                    let boldFont = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+                    attrStr.addAttribute(.font, value: boldFont, range: tagRange)
+                }
             }
         }
 
