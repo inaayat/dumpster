@@ -325,7 +325,12 @@ struct DumpView: View {
                             if lines.count >= 2 {
                                 let completedLine = lines[lines.count - 2]
                                 if !completedLine.trimmingCharacters(in: .whitespaces).isEmpty {
-                                    processMagicTags(line: completedLine)
+                                    let bullet = DumpBullet.parse(from: completedLine).first
+                                    if let bullet, !bullet.magicTags.isEmpty {
+                                        processMagicTags(line: completedLine)
+                                        let retiredLine = completedLine + DumpBullet.retiredMarker
+                                        updated = updated.replacingOccurrences(of: completedLine + "\n", with: retiredLine + "\n")
+                                    }
                                 }
                             }
                             updated += "• "
@@ -878,14 +883,34 @@ struct DumpView: View {
     private func saveDraft() {
         guard let dump = todayDump else { return }
         try? Queries.updateDumpContent(id: dump.id, content: content)
-        ensureTagsRegistered()
+        processUnhandledBullets()
     }
 
-    private func ensureTagsRegistered() {
+    private func processUnhandledBullets() {
         let bullets = DumpBullet.parse(from: content)
+
+        // Register all tags
         let allTags = Set(bullets.flatMap { $0.tags })
         for tagName in allTags {
             _ = try? Queries.getOrCreateTag(name: tagName)
+        }
+
+        // Process magic tags on non-retired bullets
+        var contentChanged = false
+        var updatedContent = content
+        for bullet in bullets where !bullet.isRetired && !bullet.magicTags.isEmpty {
+            processMagicTags(line: bullet.rawLine)
+            // Mark as retired so it won't re-process
+            let retiredLine = bullet.rawLine + DumpBullet.retiredMarker
+            updatedContent = updatedContent.replacingOccurrences(of: bullet.rawLine, with: retiredLine)
+            contentChanged = true
+        }
+
+        if contentChanged {
+            content = updatedContent
+            if let dump = todayDump {
+                try? Queries.updateDumpContent(id: dump.id, content: content)
+            }
         }
     }
 
@@ -1049,7 +1074,7 @@ struct MasterDocPanelView: View {
     private var panelToolbar: some View {
         HStack(spacing: 2) {
             toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
-            toolbarBtn(icon: "italic") { /* placeholder */ }
+            toolbarBtn(icon: "italic") { editorHandle.toggleItalic() }
             toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
             toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
             Divider().frame(height: 14).padding(.horizontal, 4)

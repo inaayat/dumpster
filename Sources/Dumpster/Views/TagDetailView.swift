@@ -303,7 +303,7 @@ struct TagMasterDocPanel: View {
     private var panelToolbar: some View {
         HStack(spacing: 2) {
             toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
-            toolbarBtn(icon: "italic") { /* italic toggle placeholder */ }
+            toolbarBtn(icon: "italic") { editorHandle.toggleItalic() }
             toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
             toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
             Divider().frame(height: 14).padding(.horizontal, 4)

@@ -107,7 +107,7 @@ struct MasterDocEditor: View {
         HStack(spacing: 12) {
             HStack(spacing: 2) {
                 toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
-                toolbarBtn(icon: "italic") { /* placeholder */ }
+                toolbarBtn(icon: "italic") { editorHandle.toggleItalic() }
                 toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
                 toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
             }
