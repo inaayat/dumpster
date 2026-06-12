@@ -149,7 +149,7 @@ struct ItemDetailPanel: View {
                 TextEditor(text: $notesText)
                     .font(.inter(13))
                     .scrollContentBackground(.hidden)
-                    .frame(minHeight: 120)
+                    .frame(minHeight: 200)
                     .padding(6)
                     .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
                     .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.border, lineWidth: 1))

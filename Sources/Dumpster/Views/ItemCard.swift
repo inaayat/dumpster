@@ -56,12 +56,21 @@ struct ItemCard: View {
                 dueDateControl
             }
 
-            if item.priority == .high && !item.done {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 16, height: 16)
-                    .background(Theme.brainstormColor, in: Circle())
+            if !item.done {
+                Menu {
+                    Button { setPriority(.high) } label: { Label("High", systemImage: "arrow.up") }
+                    Button { setPriority(.medium) } label: { Label("Standard", systemImage: "minus") }
+                    Button { setPriority(.low) } label: { Label("Low", systemImage: "arrow.down") }
+                    Button { setPriority(.backlog) } label: { Label("Backlog", systemImage: "archivebox") }
+                } label: {
+                    Image(systemName: item.priority == .high ? "arrow.up" : (item.priority == .backlog ? "archivebox" : "minus"))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(item.priority == .high ? .white : Theme.textMuted)
+                        .frame(width: 20, height: 20)
+                        .background(item.priority == .high ? Theme.actionColor : Theme.cardAlt, in: Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
         }
         .padding(Theme.cardPadding)
@@ -130,5 +139,12 @@ struct ItemCard: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func setPriority(_ priority: Priority) {
+        var updated = item
+        updated.priority = priority
+        try? Queries.updateItem(updated)
+        onDateChanged?()
     }
 }
