@@ -6,6 +6,8 @@ struct TagsView: View {
     @State private var expandedTags: Set<String> = []
     @State private var subTagsMap: [String: [Tag]] = [:]
     @State private var itemCounts: [String: Int] = [:]
+    @State private var renamingTagId: String?
+    @State private var renameText = ""
 
     var body: some View {
         ScrollView {
@@ -76,30 +78,62 @@ struct TagsView: View {
                     Color.clear.frame(width: 16, height: 16)
                 }
 
-                Button {
-                    appState.navigate(to: .tagDetail(tag.id))
-                } label: {
+                if renamingTagId == tag.id {
                     HStack(spacing: 8) {
                         Image(systemName: "number")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Theme.accent)
-                        Text(tag.name)
+                        TextField("", text: $renameText)
+                            .textFieldStyle(.plain)
                             .font(.inter(13, weight: .medium))
-                            .foregroundStyle(Theme.textPrimary)
-                        Text("\(count) items")
-                            .font(.inter(10))
-                            .foregroundStyle(Theme.textMuted)
+                            .onSubmit {
+                                let newName = renameText.lowercased().trimmingCharacters(in: .whitespaces)
+                                if !newName.isEmpty && newName != tag.name {
+                                    try? Queries.renameTagEverywhere(id: tag.id, oldName: tag.name, newName: newName)
+                                }
+                                renamingTagId = nil
+                                reload()
+                            }
+                            .onExitCommand { renamingTagId = nil }
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9))
-                            .foregroundStyle(Theme.textMuted)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.cardBorder, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.accent, lineWidth: 1))
+                } else {
+                    Button {
+                        appState.navigate(to: .tagDetail(tag.id))
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "number")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Theme.accent)
+                            Text(tag.name)
+                                .font(.inter(13, weight: .medium))
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("\(count) items")
+                                .font(.inter(10))
+                                .foregroundStyle(Theme.textMuted)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.cardBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .onTapGesture(count: 2) {
+                        renameText = tag.name
+                        renamingTagId = tag.id
+                    }
+                    .onTapGesture(count: 1) {
+                        appState.navigate(to: .tagDetail(tag.id))
+                    }
                 }
-                .buttonStyle(.plain)
             }
 
             if isExpanded, let children = subTagsMap[tag.id] {

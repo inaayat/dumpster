@@ -152,6 +152,57 @@ struct Queries {
         try db.read { db in try Tag.filter(Tag.Columns.name == name.lowercased()).fetchOne(db) }
     }
 
+    static func renameTagEverywhere(id: String, oldName: String, newName: String) throws {
+        let normalizedNew = newName.lowercased().trimmingCharacters(in: .whitespaces)
+        let normalizedOld = oldName.lowercased().trimmingCharacters(in: .whitespaces)
+        guard normalizedNew != normalizedOld, !normalizedNew.isEmpty else { return }
+
+        // Check if a tag with the new name already exists
+        if let existing = try? getTagByName(normalizedNew) {
+            // Merge: reassign all item_tags from old tag to existing tag, then delete old
+            try db.write { db in
+                // Move item associations to the existing tag
+                let oldItemTags = try Row.fetchAll(db, sql: "SELECT itemId FROM item_tags WHERE tagId = ?", arguments: [id])
+                for row in oldItemTags {
+                    let itemId: String = row["itemId"]
+                    try? db.execute(sql: "INSERT OR IGNORE INTO item_tags (itemId, tagId) VALUES (?, ?)", arguments: [itemId, existing.id])
+                }
+                _ = try ItemTag.filter(ItemTag.Columns.tagId == id).deleteAll(db)
+                // Move tag relationships
+                try db.execute(sql: "UPDATE OR IGNORE tag_relationships SET parentTagId = ? WHERE parentTagId = ?", arguments: [existing.id, id])
+                try db.execute(sql: "UPDATE OR IGNORE tag_relationships SET childTagId = ? WHERE childTagId = ?", arguments: [existing.id, id])
+                // Delete old tag
+                _ = try Tag.filter(Tag.Columns.id == id).deleteAll(db)
+            }
+        } else {
+            // Simple rename
+            try db.write { db in
+                try db.execute(sql: "UPDATE tags SET name = ? WHERE id = ?", arguments: [normalizedNew, id])
+            }
+        }
+
+        // Update all dump content
+        let allDumps = try getAllDumps()
+        for dump in allDumps {
+            let updated = dump.content
+                .replacingOccurrences(of: "#\(normalizedOld)", with: "#\(normalizedNew)")
+                .replacingOccurrences(of: "#\(oldName)", with: "#\(normalizedNew)")
+            if updated != dump.content {
+                try updateDumpContent(id: dump.id, content: updated)
+            }
+        }
+
+        // Update master doc titles if they match the old tag name
+        if let tag = try? getTagByName(normalizedNew) ?? getTag(id: id),
+           let doc = try? getMasterDoc(tagId: tag.id) {
+            let oldTitle = normalizedOld.replacingOccurrences(of: "-", with: " ").capitalized
+            if doc.title == oldTitle {
+                let newTitle = normalizedNew.replacingOccurrences(of: "-", with: " ").capitalized
+                try? upsertMasterDoc(tagId: tag.id, content: doc.content, title: newTitle)
+            }
+        }
+    }
+
     static func deleteTag(id: String) throws {
         try db.write { db in
             _ = try Tag.filter(Tag.Columns.id == id).deleteAll(db)

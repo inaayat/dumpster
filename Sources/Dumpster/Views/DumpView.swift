@@ -212,13 +212,15 @@ struct DumpView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(filteredTags, id: \.self) { tag in
-                                TagPill(tag: tag, isSelected: searchTag == tag) {
+                                TagPill(tag: tag, isSelected: searchTag == tag, action: {
                                     withAnimation(.easeInOut(duration: 0.15)) {
                                         searchTag = (searchTag == tag) ? nil : tag
                                         showMasterDocPanel = false
                                         selectedBulletIds.removeAll()
                                     }
-                                }
+                                }, onRename: { oldName, newName in
+                                    renameTag(oldName: oldName, newName: newName)
+                                })
                                 .draggable(tag)
                                 .dropDestination(for: String.self) { dropped, _ in
                                     guard let source = dropped.first, source != tag else { return false }
@@ -296,10 +298,7 @@ struct DumpView: View {
             }
 
             ZStack(alignment: .topLeading) {
-                TextEditor(text: $content)
-                    .font(.inter(13))
-                    .lineSpacing(4)
-                    .scrollContentBackground(.hidden)
+                DumpTextEditor(text: $content, fontSize: 13)
                     .frame(minHeight: 300)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(12)
@@ -705,8 +704,27 @@ struct DumpView: View {
                     try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
                     appState.refreshCounts()
                 }
+            case .delete:
+                // Find and delete items matching this bullet's text
+                if let allItems = try? Queries.searchItems(query: cleanText) {
+                    for item in allItems where stripTags(item.text).trimmingCharacters(in: .whitespaces) == cleanText {
+                        try? Queries.deleteItem(id: item.id)
+                    }
+                    appState.refreshCounts()
+                }
             }
         }
+    }
+
+    private func renameTag(oldName: String, newName: String) {
+        guard let tag = try? Queries.getTagByName(oldName) else { return }
+        try? Queries.renameTagEverywhere(id: tag.id, oldName: oldName, newName: newName)
+        // Update local content if today's dump was affected
+        if let dump = try? Queries.getOrCreateTodayDump() {
+            content = dump.content
+        }
+        if searchTag == oldName { searchTag = newName }
+        reload()
     }
 
     private func stripTags(_ text: String) -> String {
