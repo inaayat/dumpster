@@ -32,12 +32,17 @@ struct GuideView: View {
 
                 // Magic Tags
                 guideSection("Magic Tags", icon: "wand.and.stars") {
-                    magicRow("#action", "Creates an action item (task to do)", Theme.actionColor)
+                    magicRow("#action", "Creates an action item (task to do)", Theme.successColor)
                     magicRow("#prio", "Makes it high priority (combine with #action, or use alone)", .red)
                     magicRow("#brainstorm", "Creates a brainstorm item (idea to explore)", Theme.brainstormColor)
                     magicRow("#win", "Logs an achievement to your Wins", Theme.warnColor)
                     magicRow("#save", "Appends the bullet to all tagged Master Docs", Theme.accent)
                     magicRow("#resource", "Creates a resource item (link/reference)", Theme.resourceColor)
+                    magicRow("#delete", "Deletes items matching that bullet's text", .gray)
+
+                    tip("Magic tags are processed instantly when you type a space after the tag — no need to press Enter")
+                    tip("Processed bullets get marked [acknowledged] to prevent duplicates")
+                    tip("Magic tags render in color inline as you type")
 
                     Text("Example: • follow up with Sarah about budget #finance #action #prio")
                         .font(.inter(11))
@@ -51,10 +56,14 @@ struct GuideView: View {
                 // Tags & Master Docs
                 guideSection("Tags & Master Docs", icon: "number") {
                     tip("Tags are created automatically from your #hashtags — no setup needed")
+                    tip("Adding a #tag to any bullet at any time registers it immediately")
+                    tip("Double-click a tag pill to rename it — updates everywhere (dumps, docs, items)")
                     tip("Click a tag in the Dump view to see all its bullets across all days")
                     tip("Click 'Master Doc' to open the doc panel alongside the bullets")
                     tip("Drag bullets into the doc — AI places them in the right section")
-                    tip("Select multiple bullets → 'Send to doc' for batch AI insertion")
+                    tip("Items view: drag item cards into the Master Doc panel to incorporate them")
+                    tip("Incorporated items get shaded and move to the bottom of the list")
+                    tip("Master Doc has rich text: headings, bullets, indentation (Tab/Shift-Tab)")
                     tip("Sub-tags: drag one tag onto another → choose 'Make sub-tag'")
                 }
 
@@ -62,6 +71,8 @@ struct GuideView: View {
                 guideSection("Items View", icon: "square.stack.fill") {
                     tip("Filter by category: All / Actions / Brainstorms / Resources")
                     tip("'Group by tag' toggle organizes items under their tag headers")
+                    tip("Collapse/Expand All button + click each tag header to toggle")
+                    tip("Tag groups stay in place when you complete items — no shuffling")
                     tip("'High prio' toggle shows only urgent items")
                     tip("Click a due date badge to change it (or add one)")
                     tip("Newly created items float to the top for 5 minutes so you can triage")
