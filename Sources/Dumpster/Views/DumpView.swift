@@ -23,6 +23,7 @@ struct DumpView: View {
     @State private var docRefreshToken = 0
     @State private var editingBulletId: UUID? = nil
     @State private var editedBulletText = ""
+    @State private var showRetiredSection = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -560,6 +561,17 @@ struct DumpView: View {
                         }
                         Spacer()
 
+                        // Retire button
+                        Button {
+                            retireBullet(result: result)
+                        } label: {
+                            Image(systemName: "checkmark.circle")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.textMuted.opacity(0.4))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Retire this bullet")
+
                         // Add to doc button (only if not in doc and panel is open)
                         if !isInDoc && showMasterDocPanel {
                             Button {
@@ -582,6 +594,52 @@ struct DumpView: View {
                         isInDoc ? Theme.successColor.opacity(0.2) : (isSelected ? Theme.accent.opacity(0.5) : Theme.border), lineWidth: 1
                     ))
                     .draggable(result.bulletText)
+                }
+
+                // Retired section
+                let retired = findRetiredBulletsByTag(tag)
+                if !retired.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { showRetiredSection.toggle() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: showRetiredSection ? "chevron.down" : "chevron.right")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(Theme.textMuted)
+                                Text("Retired")
+                                    .font(.inter(11, weight: .medium))
+                                    .foregroundStyle(Theme.textMuted)
+                                Text("\(retired.count)")
+                                    .font(.inter(9))
+                                    .foregroundStyle(Theme.textMuted.opacity(0.6))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 16)
+
+                        if showRetiredSection {
+                            ForEach(retired, id: \.id) { result in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(Theme.textMuted.opacity(0.3))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(result.dateDisplay)
+                                            .font(.inter(9))
+                                            .foregroundStyle(Theme.textMuted.opacity(0.5))
+                                        Text(stripTags(result.bulletText))
+                                            .font(.inter(12))
+                                            .foregroundStyle(Theme.textMuted.opacity(0.5))
+                                            .strikethrough()
+                                    }
+                                    Spacer()
+                                }
+                                .padding(8)
+                                .background(Theme.cardAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -755,6 +813,35 @@ struct DumpView: View {
             }
         }
         return results
+    }
+
+    private func findRetiredBulletsByTag(_ tag: String) -> [TagSearchResult] {
+        var results: [TagSearchResult] = []
+        var allDumps = pastDumps
+        if let today = todayDump { allDumps.insert(today, at: 0) }
+        for dump in allDumps {
+            let bullets = DumpBullet.parse(from: dump.content)
+            for bullet in bullets where bullet.tags.contains(tag) && bullet.isRetired {
+                results.append(TagSearchResult(id: UUID(), dumpId: dump.id, date: dump.date, dateDisplay: DailyDump.displayDate(dump.date), bulletText: bullet.text, rawLine: bullet.rawLine))
+            }
+        }
+        return results
+    }
+
+    private func retireBullet(result: TagSearchResult) {
+        let marker = DumpBullet.retiredMarker
+        let isToday = result.date == DailyDump.today()
+
+        if isToday {
+            content = content.replacingOccurrences(of: result.rawLine, with: result.rawLine + marker)
+            saveDraft()
+        } else {
+            if let dump = pastDumps.first(where: { $0.id == result.dumpId }) {
+                let updated = dump.content.replacingOccurrences(of: result.rawLine, with: result.rawLine + marker)
+                try? Queries.updateDumpContent(id: dump.id, content: updated)
+                reload()
+            }
+        }
     }
 
     private func commitBulletEdit(result: TagSearchResult) {
