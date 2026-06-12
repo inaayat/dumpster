@@ -2,10 +2,18 @@ import AppKit
 
 enum FontLoader {
     static func registerFonts() {
-        let fontNames = ["Satoshi-Regular", "Satoshi-Medium", "Satoshi-Bold", "Satoshi-Light"]
+        let fontNames = ["Inter-Regular", "Inter-Medium", "Inter-SemiBold", "Inter-Bold"]
+        var registered = 0
         for name in fontNames {
-            guard let url = Bundle.module.url(forResource: name, withExtension: "ttf") else { continue }
-            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            if let url = Bundle.module.url(forResource: name, withExtension: "ttf") {
+                var error: Unmanaged<CFError>?
+                if CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+                    registered += 1
+                }
+            }
+        }
+        if registered == 0 {
+            print("Warning: No Satoshi fonts registered. Falling back to system font.")
         }
     }
 }

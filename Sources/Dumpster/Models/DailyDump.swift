@@ -81,4 +81,5 @@ enum MagicTag: String {
     case resource
     case win
     case save
+    case prio
 }

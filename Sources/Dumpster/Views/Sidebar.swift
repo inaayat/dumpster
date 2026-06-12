@@ -32,7 +32,7 @@ struct Sidebar: View {
 
             // Bro mode toggle
             VStack(spacing: 6) {
-                Text(appState.broMode ? "lights\non" : "lights\noff")
+                Text("bro\nmode")
                     .font(.inter(7, weight: .bold))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.sidebarMuted)

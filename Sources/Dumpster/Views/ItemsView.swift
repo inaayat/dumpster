@@ -95,6 +95,21 @@ struct ItemsView: View {
 
     @ViewBuilder
     private var flatContent: some View {
+        if !newItems.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkle").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.accent)
+                    Text("New").font(.inter(12, weight: .semibold)).foregroundStyle(Theme.accent)
+                    Text("\(newItems.count)").font(.inter(9)).foregroundStyle(Theme.textMuted)
+                }
+                ForEach(newItems) { item in
+                    ItemCard(item: item, tags: itemTags[item.id] ?? [],
+                        onTap: { appState.openDetail(itemId: item.id) },
+                        onComplete: { try? Queries.completeItem(id: item.id); appState.refreshCounts(); reload() },
+                        onDateChanged: { reload() })
+                }
+            }
+        }
         ForEach(sortedItems) { item in
             ItemCard(
                 item: item,
@@ -108,7 +123,7 @@ struct ItemsView: View {
                 onDateChanged: { reload() }
             )
         }
-        if sortedItems.isEmpty { emptyState }
+        if sortedItems.isEmpty && newItems.isEmpty { emptyState }
     }
 
     @ViewBuilder
@@ -237,12 +252,18 @@ struct ItemsView: View {
         return result
     }
 
+    private let recentThreshold = Date().addingTimeInterval(-300) // 5 minutes
+
+    private var newItems: [Item] {
+        // New items show at top REGARDLESS of filters — all recently created unsorted items
+        let allRecent = (try? Queries.getAllItems(done: false)) ?? []
+        return allRecent.filter { $0.createdAt > recentThreshold && $0.priority == .medium && $0.dueDate == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     private var sortedItems: [Item] {
-        let recentThreshold = Date().addingTimeInterval(-300) // 5 minutes
-        return items.sorted { a, b in
-            let aIsNew = a.createdAt > recentThreshold && a.priority == .medium && a.dueDate == nil
-            let bIsNew = b.createdAt > recentThreshold && b.priority == .medium && b.dueDate == nil
-            if aIsNew != bIsNew { return aIsNew }
+        let newIds = Set(newItems.map(\.id))
+        return items.filter { !newIds.contains($0.id) }.sorted { a, b in
             if a.priority.sortOrder != b.priority.sortOrder {
                 return a.priority.sortOrder < b.priority.sortOrder
             }

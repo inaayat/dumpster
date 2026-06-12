@@ -33,16 +33,17 @@ struct GuideView: View {
                 // Magic Tags
                 guideSection("Magic Tags", icon: "wand.and.stars") {
                     magicRow("#action", "Creates an action item (task to do)", Theme.actionColor)
+                    magicRow("#prio", "Makes it high priority (combine with #action, or use alone)", .red)
                     magicRow("#brainstorm", "Creates a brainstorm item (idea to explore)", Theme.brainstormColor)
                     magicRow("#win", "Logs an achievement to your Wins", Theme.warnColor)
                     magicRow("#save", "Appends the bullet to all tagged Master Docs", Theme.accent)
                     magicRow("#resource", "Creates a resource item (link/reference)", Theme.resourceColor)
 
-                    Text("Example: • follow up with Sarah about budget #finance #action")
+                    Text("Example: • follow up with Sarah about budget #finance #action #prio")
                         .font(.inter(11))
                         .foregroundStyle(Theme.textMuted)
                         .padding(.top, 4)
-                    Text("→ Creates an action item \"follow up with Sarah about budget\" tagged with #finance")
+                    Text("→ Creates a HIGH PRIORITY action \"follow up with Sarah about budget\" tagged with #finance")
                         .font(.inter(11))
                         .foregroundStyle(Theme.accent)
                 }
