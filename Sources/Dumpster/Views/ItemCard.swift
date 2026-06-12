@@ -5,6 +5,17 @@ struct ItemCard: View {
     var tags: [Tag] = []
     var onTap: () -> Void = {}
     var onComplete: (() -> Void)?
+    var onDateChanged: (() -> Void)?
+
+    @State private var showDatePicker = false
+    @State private var editedDate = Date()
+
+    private var displayText: String {
+        item.text
+            .replacingOccurrences(of: #"#[\w\-]+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -22,7 +33,7 @@ struct ItemCard: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.text)
+                Text(displayText)
                     .font(.inter(13))
                     .foregroundStyle(item.done ? Theme.textMuted : Theme.textPrimary)
                     .strikethrough(item.done)
@@ -39,10 +50,10 @@ struct ItemCard: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            if let dueDate = item.dueDate, !item.done {
-                dueBadge(dueDate)
+            if !item.done {
+                dueDateControl
             }
 
             if item.priority == .high && !item.done {
@@ -58,17 +69,66 @@ struct ItemCard: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.cardBorder, lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+        .popover(isPresented: $showDatePicker) {
+            VStack(spacing: 12) {
+                DatePicker("Due date", selection: $editedDate, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .frame(width: 260)
+                HStack {
+                    Button("Remove") {
+                        var updated = item
+                        updated.dueDate = nil
+                        try? Queries.updateItem(updated)
+                        showDatePicker = false
+                        onDateChanged?()
+                    }
+                    .font(.inter(11))
+                    .foregroundStyle(.red)
+                    Spacer()
+                    Button("Set") {
+                        var updated = item
+                        updated.dueDate = editedDate
+                        try? Queries.updateItem(updated)
+                        showDatePicker = false
+                        onDateChanged?()
+                    }
+                    .font(.inter(11, weight: .semibold))
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .controlSize(.small)
+                }
+            }
+            .padding(16)
+        }
     }
 
     @ViewBuilder
-    private func dueBadge(_ date: Date) -> some View {
-        let isOverdue = item.isOverdue
-        let isToday = item.isDueToday
-        Text(date.formatted(.dateTime.month(.abbreviated).day()))
-            .font(.inter(9, weight: .semibold))
-            .foregroundStyle(isOverdue ? .white : (isToday ? Theme.warnColor : Theme.textMuted))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(isOverdue ? Color.red : (isToday ? Theme.warnColor.opacity(0.15) : Theme.cardAlt), in: Capsule())
+    private var dueDateControl: some View {
+        if let dueDate = item.dueDate {
+            Button {
+                editedDate = dueDate
+                showDatePicker = true
+            } label: {
+                let isOverdue = item.isOverdue
+                let isToday = item.isDueToday
+                Text(dueDate.formatted(.dateTime.month(.abbreviated).day()))
+                    .font(.inter(9, weight: .semibold))
+                    .foregroundStyle(isOverdue ? .white : (isToday ? Theme.warnColor : Theme.textMuted))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(isOverdue ? Color.red : (isToday ? Theme.warnColor.opacity(0.15) : Theme.cardAlt), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                editedDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+                showDatePicker = true
+            } label: {
+                Image(systemName: "calendar")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textMuted.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+        }
     }
 }

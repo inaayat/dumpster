@@ -15,10 +15,11 @@ let package = Package(
             ],
             path: "Sources/Dumpster",
             resources: [
-                .copy("Resources/Inter-Regular.ttf"),
-                .copy("Resources/Inter-Medium.ttf"),
-                .copy("Resources/Inter-SemiBold.ttf"),
-                .copy("Resources/Inter-Bold.ttf"),
+                .copy("Resources/SpaceGrotesk-Regular.ttf"),
+                .copy("Resources/SpaceGrotesk-Medium.ttf"),
+                .copy("Resources/SpaceGrotesk-Bold.ttf"),
+                .copy("Resources/SpaceGrotesk-Light.ttf"),
+                .copy("Resources/AppIcon.icns"),
             ]
         ),
     ]

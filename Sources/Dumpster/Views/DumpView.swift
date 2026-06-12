@@ -19,25 +19,42 @@ struct DumpView: View {
     @State private var tagDropSource: String? = nil
     @State private var tagDropTarget: String? = nil
     @State private var attentionItems: [Item] = []
+    @State private var showMasterDocPanel = false
+    @State private var selectedBulletIds: Set<UUID> = []
+    @State private var docRefreshToken = 0
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
-                attentionBar
-                header
-                tagBar
-                if searchTag != nil {
-                    tagSearchSection
-                } else {
-                    todaySection
-                    if !suggestedTags.isEmpty { tagSuggestionsSection }
-                    if !proposedItems.isEmpty { reviewSection }
-                    if !pastDumps.isEmpty { pastSection }
+        HStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    attentionBar
+                    header
+                    magicTagsGuide
+                    tagBar
+                    if searchTag != nil {
+                        tagSearchSection
+                            .id(docRefreshToken)
+                    } else {
+                        todaySection
+                        if !suggestedTags.isEmpty { tagSuggestionsSection }
+                        if !proposedItems.isEmpty { reviewSection }
+                        if !pastDumps.isEmpty { pastSection }
+                    }
                 }
+                .padding(28)
             }
-            .padding(28)
+            .background(Theme.canvas)
+
+            if showMasterDocPanel, let tag = searchTag {
+                Divider()
+                MasterDocPanelView(tag: tag, onClose: {
+                    withAnimation { showMasterDocPanel = false }
+                }, onDocUpdated: {
+                    docRefreshToken += 1
+                })
+                .frame(minWidth: 300, maxWidth: .infinity)
+            }
         }
-        .background(Theme.canvas)
         .onAppear { reload() }
     }
 
@@ -130,6 +147,52 @@ struct DumpView: View {
         }
     }
 
+    // MARK: - Magic Tags Guide
+
+    private var magicTagsGuide: some View {
+        HStack(spacing: 0) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 10))
+                .foregroundStyle(Theme.accent)
+                .padding(.trailing, 8)
+
+            Group {
+                magicTagLabel("#action", color: Theme.actionColor)
+                separator
+                magicTagLabel("#brainstorm", color: Theme.brainstormColor)
+                separator
+                magicTagLabel("#win", color: Theme.warnColor)
+                separator
+                magicTagLabel("#save", color: Theme.accent)
+                separator
+                magicTagLabel("#resource", color: Theme.resourceColor)
+            }
+
+            Spacer()
+
+            Text("Toss items on Enter")
+                .font(.inter(9))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Theme.accent.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.accent.opacity(0.15), lineWidth: 1))
+    }
+
+    private func magicTagLabel(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.inter(10, weight: .semibold))
+            .foregroundStyle(color)
+    }
+
+    private var separator: some View {
+        Text("·")
+            .font(.inter(10))
+            .foregroundStyle(Theme.textMuted.opacity(0.5))
+            .padding(.horizontal, 6)
+    }
+
     // MARK: - Tag Bar
 
     private var tagBar: some View {
@@ -159,6 +222,8 @@ struct DumpView: View {
                                 TagPill(tag: tag, isSelected: searchTag == tag) {
                                     withAnimation(.easeInOut(duration: 0.15)) {
                                         searchTag = (searchTag == tag) ? nil : tag
+                                        showMasterDocPanel = false
+                                        selectedBulletIds.removeAll()
                                     }
                                 }
                                 .draggable(tag)
@@ -173,7 +238,7 @@ struct DumpView: View {
 
                             if searchTag != nil {
                                 Button {
-                                    withAnimation { searchTag = nil }
+                                    withAnimation { searchTag = nil; showMasterDocPanel = false }
                                 } label: {
                                     HStack(spacing: 3) {
                                         Image(systemName: "xmark")
@@ -292,7 +357,7 @@ struct DumpView: View {
         }
     }
 
-    // MARK: - Review Section
+    // MARK: - Review Section (Proposed Items)
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -311,10 +376,23 @@ struct DumpView: View {
     @ViewBuilder
     private func proposedRow(index: Int, proposed: AIService.ProposedItem) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: proposed.category.icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Theme.categoryColor(proposed.category))
-                .frame(width: 20)
+            // Category pill — tap to cycle
+            Button {
+                cycleCategory(at: index)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: categoryIcon(proposedItems[index].category, isWin: proposedItems[index].isWin))
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(proposedItems[index].isWin ? "Win" : proposedItems[index].category.label)
+                        .font(.inter(10, weight: .semibold))
+                }
+                .foregroundStyle(categoryColor(proposedItems[index].category, isWin: proposedItems[index].isWin))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(categoryColor(proposedItems[index].category, isWin: proposedItems[index].isWin).opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+
             Text(proposed.text).font(.inter(12)).foregroundStyle(Theme.textPrimary).lineLimit(2)
             Spacer()
             Button { acceptItem(at: index) } label: {
@@ -325,33 +403,145 @@ struct DumpView: View {
             }.buttonStyle(.plain)
         }
         .padding(10)
-        .background(Theme.categoryTint(proposed.category).opacity(0.4), in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        .background(categoryColor(proposed.category, isWin: proposed.isWin).opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
     }
 
-    // MARK: - Tag Search
+    private func cycleCategory(at index: Int) {
+        let order: [(Category, Bool)] = [(.action, false), (.brainstorm, false), (.resource, false), (.action, true)]
+        let current = (proposedItems[index].category, proposedItems[index].isWin)
+        let currentIdx = order.firstIndex(where: { $0.0 == current.0 && $0.1 == current.1 }) ?? 0
+        let next = order[(currentIdx + 1) % order.count]
+        proposedItems[index].category = next.0
+        proposedItems[index].isWin = next.1
+    }
+
+    private func categoryIcon(_ category: Category, isWin: Bool) -> String {
+        if isWin { return "star.fill" }
+        return category.icon
+    }
+
+    private func categoryColor(_ category: Category, isWin: Bool) -> Color {
+        if isWin { return Theme.warnColor }
+        return Theme.categoryColor(category)
+    }
+
+    // MARK: - Tag Search with Master Doc Panel
 
     @ViewBuilder
     private var tagSearchSection: some View {
         if let tag = searchTag {
+            let docContent = getMasterDocContent(for: tag)
             let results = findBulletsByTag(tag)
             VStack(alignment: .leading, spacing: 12) {
+                // Header
                 HStack {
                     Image(systemName: "number").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.accent)
                     Text(tag).font(.inter(16, weight: .bold)).foregroundStyle(Theme.textPrimary)
                     Text("\(results.count) bullets").font(.inter(11)).foregroundStyle(Theme.textMuted)
                     Spacer()
+
+                    // Master Doc button
+                    Button {
+                        withAnimation { showMasterDocPanel.toggle() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "doc.text.fill").font(.system(size: 9))
+                            Text("Master Doc").font(.inter(9, weight: .medium))
+                        }
+                        .foregroundStyle(showMasterDocPanel ? .white : Theme.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(showMasterDocPanel ? Theme.accent : Theme.accent.opacity(0.1), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    // Send selected to doc
+                    if !selectedBulletIds.isEmpty && showMasterDocPanel {
+                        Button {
+                            sendSelectedToDoc(tag: tag)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.right.doc").font(.system(size: 9))
+                                Text("Send \(selectedBulletIds.count) to doc").font(.inter(9, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Theme.successColor, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                ForEach(results, id: \.id) { result in
+
+                // Bullets sorted: not-in-doc first
+                let sorted = results.sorted { a, b in
+                    let aInDoc = bulletIsInDoc(a.bulletText, docContent: docContent)
+                    let bInDoc = bulletIsInDoc(b.bulletText, docContent: docContent)
+                    if aInDoc != bInDoc { return !aInDoc }
+                    return false
+                }
+
+                ForEach(sorted, id: \.id) { result in
+                    let isInDoc = bulletIsInDoc(result.bulletText, docContent: docContent)
+                    let isSelected = selectedBulletIds.contains(result.id)
+
                     HStack(spacing: 8) {
+                        // Checkbox / in-doc indicator
+                        if isInDoc {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.successColor.opacity(0.6))
+                        } else {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 14))
+                                .foregroundStyle(isSelected ? Theme.accent : Theme.textMuted.opacity(0.3))
+                                .onTapGesture {
+                                    if isSelected { selectedBulletIds.remove(result.id) }
+                                    else { selectedBulletIds.insert(result.id) }
+                                }
+                        }
+
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(result.dateDisplay).font(.inter(10, weight: .medium)).foregroundStyle(Theme.textMuted)
-                            Text(stripTags(result.bulletText)).font(.inter(13)).foregroundStyle(Theme.textPrimary).textSelection(.enabled)
+                            HStack(spacing: 6) {
+                                Text(result.dateDisplay).font(.inter(10, weight: .medium)).foregroundStyle(Theme.textMuted)
+                                if isInDoc {
+                                    Text("in doc")
+                                        .font(.inter(8, weight: .bold))
+                                        .foregroundStyle(Theme.successColor)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(Theme.successColor.opacity(0.1), in: Capsule())
+                                }
+                            }
+                            Text(stripTags(result.bulletText))
+                                .font(.inter(13))
+                                .foregroundStyle(isInDoc ? Theme.textMuted : Theme.textPrimary)
+                                .textSelection(.enabled)
                         }
                         Spacer()
+
+                        // Add to doc button (only if not in doc and panel is open)
+                        if !isInDoc && showMasterDocPanel {
+                            Button {
+                                appendBulletToMasterDoc(text: result.bulletText, tag: tag)
+                            } label: {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Theme.accent)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Append as bullet (drag into doc for AI sort)")
+                        }
                     }
                     .padding(10)
-                    .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.border, lineWidth: 1))
+                    .background(
+                        isInDoc ? Theme.successColor.opacity(0.04) : (isSelected ? Theme.accent.opacity(0.06) : Theme.cardBg),
+                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius)
+                    )
+                    .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(
+                        isInDoc ? Theme.successColor.opacity(0.2) : (isSelected ? Theme.accent.opacity(0.5) : Theme.border), lineWidth: 1
+                    ))
+                    .draggable(result.bulletText)
                 }
             }
         }
@@ -390,10 +580,30 @@ struct DumpView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                Text(dump.content).font(.inter(12)).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
-                    .padding(12)
-                    .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(dump.content).font(.inter(12)).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
+                        .padding(12)
+
+                    HStack {
+                        Spacer()
+                        Button {
+                            analyzePastDump(dump)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                Text("Analyze with AI")
+                            }
+                            .font(.inter(10, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isAnalyzing)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
+                .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                .padding(.top, 2)
             }
         }
     }
@@ -414,7 +624,6 @@ struct DumpView: View {
         if updated == "*" { updated = "• " }
         if !updated.isEmpty && !updated.hasPrefix("• ") && !updated.contains("\n") { updated = "• " + updated }
 
-        // Process magic tags on Enter
         if updated.hasSuffix("\n") {
             let lines = updated.components(separatedBy: "\n")
             if lines.count >= 2 {
@@ -504,6 +713,51 @@ struct DumpView: View {
         return results
     }
 
+    private func bulletIsInDoc(_ bulletText: String, docContent: String) -> Bool {
+        guard !docContent.isEmpty else { return false }
+        let stripped = stripTags(bulletText).trimmingCharacters(in: .whitespaces)
+        guard stripped.count > 5 else { return false }
+        return docContent.localizedCaseInsensitiveContains(stripped)
+    }
+
+    private func getMasterDocContent(for tagName: String) -> String {
+        guard let tag = try? Queries.getTagByName(tagName),
+              let doc = try? Queries.getMasterDoc(tagId: tag.id) else { return "" }
+        return doc.content
+    }
+
+    private func appendBulletToMasterDoc(text: String, tag: String) {
+        guard let tagRecord = try? Queries.getOrCreateTag(name: tag) else { return }
+        let existing = try? Queries.getMasterDoc(tagId: tagRecord.id)
+        let currentContent = existing?.content ?? ""
+        let title = existing?.title ?? tag.replacingOccurrences(of: "-", with: " ").capitalized
+        let bullet = "• \(stripTags(text))"
+        let newContent = currentContent.isEmpty ? bullet : currentContent + "\n" + bullet
+        try? Queries.upsertMasterDoc(tagId: tagRecord.id, content: newContent, title: title)
+        docRefreshToken += 1
+    }
+
+    private func sendSelectedToDoc(tag: String) {
+        let results = findBulletsByTag(tag)
+        let selectedTexts = results.filter { selectedBulletIds.contains($0.id) }.map { stripTags($0.bulletText) }
+        guard !selectedTexts.isEmpty else { return }
+
+        guard let tagRecord = try? Queries.getOrCreateTag(name: tag),
+              let doc = try? Queries.getMasterDoc(tagId: tagRecord.id) else { return }
+
+        // Use AI to insert into doc
+        Task {
+            do {
+                let result = try await AIService.insertBulletsIntoDoc(existingContent: doc.content, bullets: selectedTexts)
+                try? Queries.upsertMasterDoc(tagId: tagRecord.id, content: result, title: doc.title)
+                await MainActor.run {
+                    selectedBulletIds.removeAll()
+                    docRefreshToken += 1
+                }
+            } catch {}
+        }
+    }
+
     private func applyTagSuggestion(index: Int, suggestion: AIService.SuggestedTag) {
         let lines = content.components(separatedBy: "\n")
         let updated = lines.map { line -> String in
@@ -567,6 +821,22 @@ struct DumpView: View {
         }
     }
 
+    private func analyzePastDump(_ dump: DailyDump) {
+        isAnalyzing = true
+        Task {
+            do {
+                let result = try await AIService.analyzeDump(content: dump.content)
+                await MainActor.run {
+                    proposedItems = result.proposedItems
+                    suggestedTags = result.suggestedTags
+                    isAnalyzing = false
+                }
+            } catch {
+                await MainActor.run { isAnalyzing = false }
+            }
+        }
+    }
+
     private func saveDraft() {
         guard let dump = todayDump else { return }
         try? Queries.updateDumpContent(id: dump.id, content: content)
@@ -578,6 +848,142 @@ struct DumpView: View {
         let all = (try? Queries.getAllDumps()) ?? []
         pastDumps = all.filter { $0.date != DailyDump.today() }
         attentionItems = (try? Queries.getOverdueAndDueToday()) ?? []
+    }
+}
+
+// MARK: - Master Doc Panel (slides in from right)
+
+struct MasterDocPanelView: View {
+    let tag: String
+    var onClose: () -> Void
+    var onDocUpdated: (() -> Void)? = nil
+
+    @State private var content = ""
+    @State private var title = ""
+    @State private var isSynthesizing = false
+    @State private var isInserting = false
+    @State private var isDragOver = false
+    @State private var fontSize: CGFloat = 13
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.fill").font(.system(size: 12)).foregroundStyle(Theme.accent)
+                Text(title.isEmpty ? tag : title).font(.inter(14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Button {
+                    synthesize()
+                } label: {
+                    HStack(spacing: 3) {
+                        if isSynthesizing { ProgressView().controlSize(.mini) }
+                        else { Image(systemName: "sparkles").font(.system(size: 9)) }
+                        Text("Synthesize").font(.inter(9, weight: .medium))
+                    }
+                    .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSynthesizing || content.isEmpty)
+
+                Button { onClose() } label: {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            if isInserting {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("AI is placing bullets into the doc...")
+                        .font(.inter(11)).foregroundStyle(Theme.textMuted)
+                }
+                .padding(10)
+                Divider()
+            }
+
+            // Editor with drop zone
+            ZStack {
+                TextEditor(text: $content)
+                    .font(.inter(fontSize))
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .onChange(of: content) { saveDoc() }
+
+                if isDragOver {
+                    VStack(spacing: 8) {
+                        Image(systemName: "arrow.down.doc.fill").font(.system(size: 24)).foregroundStyle(Theme.accent)
+                        Text("Drop to AI-sort into doc").font(.inter(12, weight: .semibold)).foregroundStyle(Theme.accent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.accent.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.cornerRadius)
+                            .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [8]))
+                            .padding(6)
+                    )
+                }
+            }
+            .dropDestination(for: String.self) { dropped, _ in
+                isDragOver = false
+                let bullets = dropped.flatMap { $0.components(separatedBy: "\n") }.filter { !$0.isEmpty }
+                guard !bullets.isEmpty else { return false }
+                aiInsertBullets(bullets)
+                return true
+            } isTargeted: { targeted in
+                isDragOver = targeted
+            }
+        }
+        .background(Theme.canvas)
+        .onAppear { loadDoc() }
+    }
+
+    private func aiInsertBullets(_ bullets: [String]) {
+        isInserting = true
+        Task {
+            do {
+                let result = try await AIService.insertBulletsIntoDoc(existingContent: content, bullets: bullets)
+                await MainActor.run {
+                    content = result
+                    saveDoc()
+                    isInserting = false
+                    onDocUpdated?()
+                }
+            } catch {
+                await MainActor.run { isInserting = false }
+            }
+        }
+    }
+
+    private func synthesize() {
+        isSynthesizing = true
+        Task {
+            do {
+                let result = try await AIService.synthesizeMasterDoc(existingContent: content, bullets: content)
+                await MainActor.run { content = result; saveDoc(); isSynthesizing = false; onDocUpdated?() }
+            } catch {
+                await MainActor.run { isSynthesizing = false }
+            }
+        }
+    }
+
+    private func saveDoc() {
+        guard let tagRecord = try? Queries.getTagByName(tag) ?? Queries.getOrCreateTag(name: tag) else { return }
+        let docTitle = title.isEmpty ? tag.replacingOccurrences(of: "-", with: " ").capitalized : title
+        try? Queries.upsertMasterDoc(tagId: tagRecord.id, content: content, title: docTitle)
+    }
+
+    private func loadDoc() {
+        guard let tagRecord = try? Queries.getTagByName(tag),
+              let doc = try? Queries.getMasterDoc(tagId: tagRecord.id) else {
+            title = tag.replacingOccurrences(of: "-", with: " ").capitalized
+            return
+        }
+        content = doc.content
+        title = doc.title
     }
 }
 

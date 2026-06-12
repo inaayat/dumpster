@@ -47,37 +47,44 @@ protocol DesignPackage {
     var colorScheme: ColorScheme? { get }
 }
 
-// MARK: - Warm Package (Default)
+// MARK: - Dumpster Fire Package (Default)
 
-struct WarmPackage: DesignPackage {
-    let name = "Warm"
+struct DumpsterFirePackage: DesignPackage {
+    let name = "Dumpster Fire"
 
-    let canvas = Color(hex: "#F5EFE6")
+    // Pulled from the dumpster fire pin:
+    // Teal body, charcoal lid, orange/yellow flames, cream background
+    let canvas = Color(hex: "#F5F3F0")      // warm off-white
     let cardBg = Color(hex: "#FFFFFF")
-    let cardAlt = Color(hex: "#F9F9F7")
-    let sidebarBg = Color(hex: "#0F0F10")
+    let cardAlt = Color(hex: "#F0EFED")
+    let sidebarBg = Color(hex: "#2D2D2D")   // charcoal (the lid)
 
-    let textPrimary = Color(hex: "#0F0F10")
-    let textSecondary = Color(hex: "#2A2A2A")
-    let textMuted = Color(hex: "#7A7A7A")
+    let textPrimary = Color(hex: "#1A1A1A")
+    let textSecondary = Color(hex: "#3A3A3A")
+    let textMuted = Color(hex: "#8A8A8A")
     let sidebarText = Color(hex: "#FFFFFF")
-    let sidebarMuted = Color(hex: "#9A9A9A")
+    let sidebarMuted = Color(hex: "#A0A0A0")
 
-    let border = Color(hex: "#E6E0D6")
-    let divider = Color(hex: "#E6E0D6")
-    let cardBorder = Color.clear
+    let border = Color(hex: "#E5E3E0")
+    let divider = Color(hex: "#E5E3E0")
+    let cardBorder = Color(hex: "#E5E3E0")
 
-    let actionColor = Color(hex: "#7E944F")
-    let actionTint = Color(hex: "#C9D7A3")
-    let brainstormColor = Color(hex: "#C85A8E")
-    let brainstormTint = Color(hex: "#F4B6D3")
-    let resourceColor = Color(hex: "#6E8FBC")
-    let resourceTint = Color(hex: "#C9D8EF")
+    // Action = flame orange (urgent, hot, do it now)
+    let actionColor = Color(hex: "#F15A24")
+    let actionTint = Color(hex: "#FDDCCC")
+    // Brainstorm = teal (the dumpster body — ideas live here)
+    let brainstormColor = Color(hex: "#2D8A7E")
+    let brainstormTint = Color(hex: "#D0F0EC")
+    // Resource = warm purple (collected, saved, referenced)
+    let resourceColor = Color(hex: "#7B68EE")
+    let resourceTint = Color(hex: "#E0DBFC")
 
-    let accent = Color(hex: "#A75A8A")
-    let accentTint = Color(hex: "#F4B6D3")
-    let warnColor = Color(hex: "#C7A73E")
-    let successColor = Color(hex: "#7E944F")
+    // Primary accent = teal (the dumpster itself)
+    let accent = Color(hex: "#3BA99C")
+    let accentTint = Color(hex: "#C5E8E4")
+    // Warning/wins = flame yellow
+    let warnColor = Color(hex: "#F7941D")
+    let successColor = Color(hex: "#2D8A7E")
 
     let cornerRadius: CGFloat = 10
     let cardPadding: CGFloat = 14
@@ -87,37 +94,39 @@ struct WarmPackage: DesignPackage {
     let colorScheme: ColorScheme? = .light
 }
 
-// MARK: - Bro Package (Dark/System)
+// MARK: - Bro Package (Dark — dumpster at night)
 
 struct BroPackage: DesignPackage {
     let name = "Bro"
 
-    var canvas: Color { Color(nsColor: .windowBackgroundColor) }
-    var cardBg: Color { Color(nsColor: .controlBackgroundColor) }
+    // Dark charcoal base — like the dumpster lid
+    let canvas = Color(hex: "#1C1C1E")
+    let cardBg = Color(hex: "#2C2C2E")
     let cardAlt = Color(hex: "#3A3A3C")
-    let sidebarBg = Color(hex: "#0F0F10")
+    let sidebarBg = Color(hex: "#141414")
 
-    var textPrimary: Color { Color(nsColor: .labelColor) }
-    var textSecondary: Color { Color(nsColor: .secondaryLabelColor) }
-    var textMuted: Color { Color(nsColor: .tertiaryLabelColor) }
+    let textPrimary = Color(hex: "#F0F0F0")
+    let textSecondary = Color(hex: "#C8C8C8")
+    let textMuted = Color(hex: "#7A7A7A")
     let sidebarText = Color(hex: "#FFFFFF")
-    let sidebarMuted = Color(hex: "#9A9A9A")
+    let sidebarMuted = Color(hex: "#8A8A8A")
 
-    var border: Color { Color(nsColor: .separatorColor) }
-    var divider: Color { Color(nsColor: .separatorColor) }
-    var cardBorder: Color { Color(nsColor: .separatorColor) }
+    let border = Color(hex: "#3A3A3C")
+    let divider = Color(hex: "#3A3A3C")
+    let cardBorder = Color(hex: "#444446")
 
-    var actionColor: Color { Color(nsColor: .secondaryLabelColor) }
-    let actionTint = Color(hex: "#2C2C2E")
-    var brainstormColor: Color { Color(nsColor: .secondaryLabelColor) }
-    let brainstormTint = Color(hex: "#2C2C2E")
-    var resourceColor: Color { Color(nsColor: .secondaryLabelColor) }
-    let resourceTint = Color(hex: "#2C2C2E")
+    // Colors glow against dark — keep them vibrant
+    let actionColor = Color(hex: "#FF6B35")
+    let actionTint = Color(hex: "#3D2518")
+    let brainstormColor = Color(hex: "#3BA99C")
+    let brainstormTint = Color(hex: "#1A3230")
+    let resourceColor = Color(hex: "#9B8AFB")
+    let resourceTint = Color(hex: "#2A2540")
 
-    var accent: Color { Color(nsColor: .secondaryLabelColor) }
-    let accentTint = Color(hex: "#2C2C2E")
-    var warnColor: Color { Color(nsColor: .secondaryLabelColor) }
-    var successColor: Color { Color(nsColor: .secondaryLabelColor) }
+    let accent = Color(hex: "#3BA99C")
+    let accentTint = Color(hex: "#1A3230")
+    let warnColor = Color(hex: "#FFB347")
+    let successColor = Color(hex: "#3BA99C")
 
     let cornerRadius: CGFloat = 10
     let cardPadding: CGFloat = 14
@@ -130,7 +139,7 @@ struct BroPackage: DesignPackage {
 // MARK: - Theme (Active Package Accessor)
 
 enum Theme {
-    static var activePackage: DesignPackage = WarmPackage()
+    static var activePackage: DesignPackage = DumpsterFirePackage()
 
     static var isBro: Bool { UserDefaults.standard.bool(forKey: "broMode") }
 
@@ -210,15 +219,16 @@ extension Color {
     }
 }
 
-// MARK: - Inter Font Extension
+// MARK: - Font Extension
 
 extension Font {
     static func inter(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let name: String = switch weight {
-        case .bold: "Inter-Bold"
-        case .semibold: "Inter-SemiBold"
-        case .medium: "Inter-Medium"
-        default: "Inter-Regular"
+        case .bold: "SpaceGrotesk-Bold"
+        case .semibold: "SpaceGrotesk-Bold"
+        case .medium: "SpaceGrotesk-Medium"
+        case .light: "SpaceGrotesk-Light"
+        default: "SpaceGrotesk-Regular"
         }
         return .custom(name, size: size)
     }

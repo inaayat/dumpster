@@ -23,6 +23,8 @@ struct ItemDetailPanel: View {
                     notesSection
                     resourcesSection
                 }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 20)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Theme.categoryTint(item.category).opacity(0.3))

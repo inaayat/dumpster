@@ -10,7 +10,7 @@ struct DumpsterApp: App {
         }
         .defaultSize(width: 1000, height: 700)
 
-        MenuBarExtra("Dumpster", systemImage: "tray.fill") {
+        MenuBarExtra("Dumpster", systemImage: "trash.fill") {
             Button("Add Note") {
                 DumpPanel.shared.toggle()
             }
@@ -40,8 +40,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApp.applicationIconImage = icon
+        }
+
         FontLoader.registerFonts()
         _ = DatabaseManager.shared
+
+        // Import from MyMind on first launch if old DB exists and new DB is empty
+        if MigrationService.oldDbExists,
+           (try? Queries.getAllItems().isEmpty) == true {
+            try? MigrationService.importFromMyMind()
+        }
 
         try? Queries.promoteDueSoonToHigh()
 

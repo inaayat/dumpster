@@ -17,7 +17,7 @@ struct ContentView: View {
                 Divider().background(Theme.divider)
 
                 detailPanel
-                    .frame(width: 400)
+                    .frame(minWidth: 320, idealWidth: 380, maxWidth: 400)
                     .background(Theme.cardBg)
                     .transition(.move(edge: .trailing))
             }

@@ -4,8 +4,15 @@ struct ItemsView: View {
     @Bindable var appState: AppState
     @State private var items: [Item] = []
     @State private var itemTags: [String: [Tag]] = [:]
-    @State private var selectedCategory: Category? = .action
-    @State private var showCompleted = false
+    @State private var selectedCategory: Category? = {
+        if let raw = UserDefaults.standard.string(forKey: "items.category") {
+            return Category(rawValue: raw)
+        }
+        return .action
+    }()
+    @State private var showCompleted = UserDefaults.standard.bool(forKey: "items.showCompleted")
+    @State private var groupByTag = UserDefaults.standard.bool(forKey: "items.groupByTag")
+    @State private var highPrioOnly = UserDefaults.standard.bool(forKey: "items.highPrioOnly")
     @State private var searchQuery = ""
     @State private var counts: [String: Int] = [:]
 
@@ -17,11 +24,23 @@ struct ItemsView: View {
                     .font(.inter(24, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
-                Toggle("Completed", isOn: $showCompleted)
+                Toggle("High prio", isOn: $highPrioOnly)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .font(.inter(11))
-                    .onChange(of: showCompleted) { _, _ in reload() }
+                    .onChange(of: highPrioOnly) { _, v in UserDefaults.standard.set(v, forKey: "items.highPrioOnly"); reload() }
+
+                Toggle("By tag", isOn: $groupByTag)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .font(.inter(11))
+                    .onChange(of: groupByTag) { _, v in UserDefaults.standard.set(v, forKey: "items.groupByTag") }
+
+                Toggle("Done", isOn: $showCompleted)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .font(.inter(11))
+                    .onChange(of: showCompleted) { _, v in UserDefaults.standard.set(v, forKey: "items.showCompleted"); reload() }
             }
             .padding(.horizontal, 28)
             .padding(.top, 20)
@@ -30,7 +49,10 @@ struct ItemsView: View {
             // Filter tabs
             HStack {
                 FilterTabs(selected: $selectedCategory, counts: counts)
-                    .onChange(of: selectedCategory) { _, _ in reload() }
+                    .onChange(of: selectedCategory) { _, v in
+                        UserDefaults.standard.set(v?.rawValue ?? "", forKey: "items.category")
+                        reload()
+                    }
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 12)
@@ -54,30 +76,10 @@ struct ItemsView: View {
             // Items list
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.itemSpacing) {
-                    ForEach(sortedItems) { item in
-                        ItemCard(
-                            item: item,
-                            tags: itemTags[item.id] ?? [],
-                            onTap: { appState.openDetail(itemId: item.id) },
-                            onComplete: {
-                                try? Queries.completeItem(id: item.id)
-                                appState.refreshCounts()
-                                reload()
-                            }
-                        )
-                    }
-
-                    if sortedItems.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "tray")
-                                .font(.system(size: 28))
-                                .foregroundStyle(Theme.textMuted.opacity(0.4))
-                            Text("No items yet")
-                                .font(.inter(13))
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                    if groupByTag {
+                        groupedByTagContent
+                    } else {
+                        flatContent
                     }
                 }
                 .padding(.horizontal, 28)
@@ -86,10 +88,161 @@ struct ItemsView: View {
         }
         .background(Theme.canvas)
         .onAppear { reload() }
+        .onChange(of: appState.showEditSheet) { _, showing in
+            if !showing { reload() }
+        }
+    }
+
+    @ViewBuilder
+    private var flatContent: some View {
+        ForEach(sortedItems) { item in
+            ItemCard(
+                item: item,
+                tags: itemTags[item.id] ?? [],
+                onTap: { appState.openDetail(itemId: item.id) },
+                onComplete: {
+                    try? Queries.completeItem(id: item.id)
+                    appState.refreshCounts()
+                    reload()
+                },
+                onDateChanged: { reload() }
+            )
+        }
+        if sortedItems.isEmpty { emptyState }
+    }
+
+    @ViewBuilder
+    private var groupedByTagContent: some View {
+        // High-prio items always at top, regardless of tag
+        let highPrioItems = sortedItems.filter { $0.priority == .high }
+        if !highPrioItems.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Theme.brainstormColor)
+                    Text("High Priority")
+                        .font(.inter(12, weight: .semibold))
+                        .foregroundStyle(Theme.brainstormColor)
+                    Text("\(highPrioItems.count)")
+                        .font(.inter(9))
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .padding(.top, 4)
+
+                ForEach(highPrioItems) { item in
+                    ItemCard(
+                        item: item,
+                        tags: itemTags[item.id] ?? [],
+                        onTap: { appState.openDetail(itemId: item.id) },
+                        onComplete: {
+                            try? Queries.completeItem(id: item.id)
+                            appState.refreshCounts()
+                            reload()
+                        },
+                        onDateChanged: { reload() }
+                    )
+                }
+            }
+        }
+
+        // Remaining items grouped by tag
+        let grouped = groupItemsByTag(excludeHighPrio: true)
+        ForEach(grouped) { group in
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    if let tag = group.tag {
+                        Image(systemName: "number")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                        Text(tag.name)
+                            .font(.inter(12, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                        Text("\(group.items.count)")
+                            .font(.inter(9))
+                            .foregroundStyle(Theme.textMuted)
+                    } else {
+                        Text("Untagged")
+                            .font(.inter(12, weight: .semibold))
+                            .foregroundStyle(Theme.textMuted)
+                        Text("\(group.items.count)")
+                            .font(.inter(9))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+                .padding(.top, group.tag == nil ? 12 : 16)
+
+                ForEach(group.items) { item in
+                    ItemCard(
+                        item: item,
+                        tags: [],
+                        onTap: { appState.openDetail(itemId: item.id) },
+                        onComplete: {
+                            try? Queries.completeItem(id: item.id)
+                            appState.refreshCounts()
+                            reload()
+                        },
+                        onDateChanged: { reload() }
+                    )
+                }
+            }
+        }
+        if sortedItems.isEmpty { emptyState }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "tray")
+                .font(.system(size: 28))
+                .foregroundStyle(Theme.textMuted.opacity(0.4))
+            Text("No items yet")
+                .font(.inter(13))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 40)
+    }
+
+    private struct TagGroup: Identifiable {
+        let id: String
+        let tag: Tag?
+        let items: [Item]
+    }
+
+    private func groupItemsByTag(excludeHighPrio: Bool = false) -> [TagGroup] {
+        var taggedGroups: [String: (tag: Tag, items: [Item])] = [:]
+        var untagged: [Item] = []
+
+        let source = excludeHighPrio ? sortedItems.filter { $0.priority != .high } : sortedItems
+        for item in source {
+            let tags = itemTags[item.id] ?? []
+            if let firstTag = tags.first {
+                if taggedGroups[firstTag.id] == nil {
+                    taggedGroups[firstTag.id] = (tag: firstTag, items: [])
+                }
+                taggedGroups[firstTag.id]?.items.append(item)
+            } else {
+                untagged.append(item)
+            }
+        }
+
+        var result = taggedGroups.values
+            .sorted { $0.items.count > $1.items.count }
+            .map { TagGroup(id: $0.tag.id, tag: $0.tag, items: $0.items) }
+
+        if !untagged.isEmpty {
+            result.append(TagGroup(id: "untagged", tag: nil, items: untagged))
+        }
+        return result
     }
 
     private var sortedItems: [Item] {
-        items.sorted { a, b in
+        let recentThreshold = Date().addingTimeInterval(-300) // 5 minutes
+        return items.sorted { a, b in
+            let aIsNew = a.createdAt > recentThreshold && a.priority == .medium && a.dueDate == nil
+            let bIsNew = b.createdAt > recentThreshold && b.priority == .medium && b.dueDate == nil
+            if aIsNew != bIsNew { return aIsNew }
             if a.priority.sortOrder != b.priority.sortOrder {
                 return a.priority.sortOrder < b.priority.sortOrder
             }
@@ -109,6 +262,10 @@ struct ItemsView: View {
             items = (try? Queries.getItems(category: selectedCategory, done: true)) ?? []
         } else {
             items = (try? Queries.getItems(category: selectedCategory, done: false)) ?? []
+        }
+
+        if highPrioOnly {
+            items = items.filter { $0.priority == .high }
         }
 
         var tagMap: [String: [Tag]] = [:]

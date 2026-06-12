@@ -75,8 +75,22 @@ struct EditSheet: View {
     }
 
     private func save() {
+        let rawText = text.trimmingCharacters(in: .whitespaces)
+
+        // Extract any #tags from the text and create tag associations
+        let inlineTags = DumpBullet.extractTags(from: rawText)
+        if !inlineTags.isEmpty {
+            try? Queries.tagItemWithNames(itemId: item.id, tagNames: inlineTags)
+        }
+
+        // Strip #tags from the saved text
+        let cleanText = rawText
+            .replacingOccurrences(of: #"#[\w\-]+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+
         var updated = item
-        updated.text = text.trimmingCharacters(in: .whitespaces)
+        updated.text = cleanText
         updated.category = category
         updated.priority = priority
         updated.dueDate = hasDueDate ? dueDate : nil
