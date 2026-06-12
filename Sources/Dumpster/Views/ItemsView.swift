@@ -16,6 +16,7 @@ struct ItemsView: View {
     @State private var searchQuery = ""
     @State private var counts: [String: Int] = [:]
     @State private var collapsedTags: Set<String> = []
+    @State private var stableTagOrder: [String] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -113,7 +114,7 @@ struct ItemsView: View {
             }
         }
         .background(Theme.canvas)
-        .onAppear { reload() }
+        .onAppear { reload(); resetTagOrder() }
         .onChange(of: appState.showEditSheet) { _, showing in
             if !showing { reload() }
         }
@@ -280,13 +281,32 @@ struct ItemsView: View {
             }
         }
 
-        var result = taggedGroups.values
-            .sorted { $0.items.count > $1.items.count }
-            .map { TagGroup(id: $0.tag.id, tag: $0.tag, items: $0.items) }
-
-        if !untagged.isEmpty {
-            result.append(TagGroup(id: "untagged", tag: nil, items: untagged))
+        // Sort by stable order if we have one, otherwise by count (initial load)
+        var result: [TagGroup]
+        if stableTagOrder.isEmpty {
+            result = taggedGroups.values
+                .sorted { $0.items.count > $1.items.count }
+                .map { TagGroup(id: $0.tag.id, tag: $0.tag, items: $0.items) }
+            if !untagged.isEmpty {
+                result.append(TagGroup(id: "untagged", tag: nil, items: untagged))
+            }
+        } else {
+            result = stableTagOrder.compactMap { id in
+                if id == "untagged" {
+                    return untagged.isEmpty ? nil : TagGroup(id: "untagged", tag: nil, items: untagged)
+                }
+                guard let group = taggedGroups[id] else { return nil }
+                return TagGroup(id: group.tag.id, tag: group.tag, items: group.items)
+            }
+            // Add any new tags not in the stable order
+            for (id, group) in taggedGroups where !stableTagOrder.contains(id) {
+                result.append(TagGroup(id: group.tag.id, tag: group.tag, items: group.items))
+            }
+            if !untagged.isEmpty && !stableTagOrder.contains("untagged") {
+                result.append(TagGroup(id: "untagged", tag: nil, items: untagged))
+            }
         }
+
         return result
     }
 
@@ -312,6 +332,12 @@ struct ItemsView: View {
             if b.dueDate != nil { return false }
             return a.createdAt > b.createdAt
         }
+    }
+
+    private func resetTagOrder() {
+        stableTagOrder = []
+        let groups = groupItemsByTag(excludeHighPrio: true)
+        stableTagOrder = groups.map(\.id)
     }
 
     private func reload() {
