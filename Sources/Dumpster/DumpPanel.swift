@@ -49,7 +49,7 @@ struct DumpPanelContent: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack {
-                Image(systemName: "tray.fill")
+                Image(systemName: "trash.fill")
                     .foregroundStyle(Theme.accent)
                 Text("Quick Dump")
                     .font(.inter(13, weight: .semibold))
