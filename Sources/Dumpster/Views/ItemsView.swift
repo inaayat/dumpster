@@ -15,6 +15,7 @@ struct ItemsView: View {
     @State private var highPrioOnly = UserDefaults.standard.bool(forKey: "items.highPrioOnly")
     @State private var searchQuery = ""
     @State private var counts: [String: Int] = [:]
+    @State private var collapsedTags: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,6 +36,29 @@ struct ItemsView: View {
                     .controlSize(.mini)
                     .font(.inter(11))
                     .onChange(of: groupByTag) { _, v in UserDefaults.standard.set(v, forKey: "items.groupByTag") }
+
+                if groupByTag {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { collapsedTags.removeAll() } } label: {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Expand all")
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            let groups = groupItemsByTag(excludeHighPrio: true)
+                            collapsedTags = Set(groups.map(\.id))
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Collapse all")
+                }
 
                 Toggle("Done", isOn: $showCompleted)
                     .toggleStyle(.switch)
@@ -164,41 +188,53 @@ struct ItemsView: View {
         // Remaining items grouped by tag
         let grouped = groupItemsByTag(excludeHighPrio: true)
         ForEach(grouped) { group in
+            let isCollapsed = collapsedTags.contains(group.id)
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    if let tag = group.tag {
-                        Image(systemName: "number")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Theme.accent)
-                        Text(tag.name)
-                            .font(.inter(12, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isCollapsed { collapsedTags.remove(group.id) }
+                        else { collapsedTags.insert(group.id) }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Theme.textMuted)
+                        if let tag = group.tag {
+                            Image(systemName: "number")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Theme.accent)
+                            Text(tag.name)
+                                .font(.inter(12, weight: .semibold))
+                                .foregroundStyle(Theme.accent)
+                        } else {
+                            Text("Untagged")
+                                .font(.inter(12, weight: .semibold))
+                                .foregroundStyle(Theme.textMuted)
+                        }
                         Text("\(group.items.count)")
                             .font(.inter(9))
                             .foregroundStyle(Theme.textMuted)
-                    } else {
-                        Text("Untagged")
-                            .font(.inter(12, weight: .semibold))
-                            .foregroundStyle(Theme.textMuted)
-                        Text("\(group.items.count)")
-                            .font(.inter(9))
-                            .foregroundStyle(Theme.textMuted)
+                        Spacer()
                     }
                 }
+                .buttonStyle(.plain)
                 .padding(.top, group.tag == nil ? 12 : 16)
 
-                ForEach(group.items) { item in
-                    ItemCard(
-                        item: item,
-                        tags: [],
-                        onTap: { appState.openDetail(itemId: item.id) },
-                        onComplete: {
-                            try? Queries.completeItem(id: item.id)
-                            appState.refreshCounts()
-                            reload()
-                        },
-                        onDateChanged: { reload() }
-                    )
+                if !isCollapsed {
+                    ForEach(group.items) { item in
+                        ItemCard(
+                            item: item,
+                            tags: [],
+                            onTap: { appState.openDetail(itemId: item.id) },
+                            onComplete: {
+                                try? Queries.completeItem(id: item.id)
+                                appState.refreshCounts()
+                                reload()
+                            },
+                            onDateChanged: { reload() }
+                        )
+                    }
                 }
             }
         }
