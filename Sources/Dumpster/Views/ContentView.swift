@@ -51,6 +51,8 @@ struct ContentView: View {
             DocsListView(appState: appState)
         case .masterDoc(let tagId):
             MasterDocEditor(appState: appState, tagId: tagId)
+        case .guide:
+            GuideView()
         }
     }
 

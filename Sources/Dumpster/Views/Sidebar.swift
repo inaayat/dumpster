@@ -5,14 +5,20 @@ struct Sidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Logo
-            Image(systemName: "trash.fill")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 36, height: 36)
-                .background(Theme.accentTint.opacity(0.4), in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-                .padding(.top, 20)
-                .padding(.bottom, 24)
+            // Logo — tap to open Guide
+            Button {
+                appState.navigate(to: .guide)
+            } label: {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 36, height: 36)
+                    .background(Theme.accentTint.opacity(0.4), in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help("Guide & Instructions")
+            .padding(.top, 20)
+            .padding(.bottom, 24)
 
             VStack(spacing: 16) {
                 sidebarIcon(.dump, icon: "flame.fill", tooltip: "Dump")

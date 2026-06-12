@@ -9,6 +9,7 @@ enum NavigationDestination: Hashable {
     case wins
     case docs
     case masterDoc(String) // tag ID
+    case guide
 }
 
 @Observable

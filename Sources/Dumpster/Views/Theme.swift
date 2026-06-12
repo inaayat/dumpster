@@ -224,11 +224,11 @@ extension Color {
 extension Font {
     static func inter(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let name: String = switch weight {
-        case .bold: "SpaceGrotesk-Bold"
-        case .semibold: "SpaceGrotesk-Bold"
-        case .medium: "SpaceGrotesk-Medium"
-        case .light: "SpaceGrotesk-Light"
-        default: "SpaceGrotesk-Regular"
+        case .bold: "Satoshi-Bold"
+        case .semibold: "Satoshi-Bold"
+        case .medium: "Satoshi-Medium"
+        case .light: "Satoshi-Light"
+        default: "Satoshi-Regular"
         }
         return .custom(name, size: size)
     }
