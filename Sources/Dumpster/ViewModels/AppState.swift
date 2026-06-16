@@ -19,6 +19,7 @@ final class AppState {
         didSet { UserDefaults.standard.set(broMode, forKey: "broMode") }
     }
     var detailPanelItemId: String?
+    var masterDocPanelTagId: String?
     var showEditSheet = false
     var editingItem: Item?
     var searchQuery = ""
@@ -41,6 +42,19 @@ final class AppState {
 
     func closeDetail() {
         detailPanelItemId = nil
+    }
+
+    func openMasterDocPanel(tagId: String) {
+        if (try? Queries.getMasterDoc(tagId: tagId)) == nil {
+            let tag = try? Queries.getTag(id: tagId)
+            let title = (tag?.name ?? "Untitled").replacingOccurrences(of: "-", with: " ").capitalized
+            try? Queries.upsertMasterDoc(tagId: tagId, content: "", title: title)
+        }
+        masterDocPanelTagId = tagId
+    }
+
+    func closeMasterDocPanel() {
+        masterDocPanelTagId = nil
     }
 
     func refreshCounts() {

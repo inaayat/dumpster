@@ -3,45 +3,6 @@ import Foundation
 struct AIService {
     private static let client = AIClient.shared
 
-    // MARK: - Categorize
-
-    struct CategorizeResult {
-        let category: Category
-        let tags: [String]
-        let cleanedText: String
-    }
-
-    static func categorize(text: String) async throws -> CategorizeResult {
-        if text.trimmingCharacters(in: .whitespaces).range(of: #"^https?://\S+$"#, options: .regularExpression) != nil {
-            return CategorizeResult(category: .resource, tags: [], cleanedText: text.trimmingCharacters(in: .whitespaces))
-        }
-
-        let system = """
-            You categorize user thoughts, extract topic tags, and clean up the language.
-            Categories:
-            - brainstorm: ideas, musings, observations, questions
-            - action: concrete tasks, things to do, deliverables
-            - resource: URLs, links, references, articles
-
-            Tags: extract 1-3 short topic tags. Use project/system names when applicable. Lowercase, 1-2 words.
-
-            cleaned_text: Rewrite to be clearer and more concise. Fix typos, grammar. Keep it natural.
-
-            Respond with ONLY valid JSON:
-            {"category": "...", "tags": ["tag1"], "cleaned_text": "..."}
-            """
-
-        let response = try await client.send(system: system, userMessage: text, maxTokens: 400)
-        let parsed = try parseJSON(response)
-
-        let categoryStr = parsed["category"] as? String ?? "brainstorm"
-        let category = Category(rawValue: categoryStr) ?? .brainstorm
-        let tags = (parsed["tags"] as? [String] ?? []).prefix(5).map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
-        let cleanedText = (parsed["cleaned_text"] as? String)?.trimmingCharacters(in: .whitespaces) ?? text
-
-        return CategorizeResult(category: category, tags: Array(tags), cleanedText: cleanedText)
-    }
-
     // MARK: - Analyze Dump
 
     struct AnalyzeResult {
@@ -155,70 +116,6 @@ struct AIService {
         if !existingContent.isEmpty { userMessage += "EXISTING DOCUMENT:\n\(existingContent)\n\n" }
         userMessage += "BULLETS TO INTEGRATE:\n\(bullets)"
         return try await client.send(system: system, userMessage: userMessage, maxTokens: 4000)
-    }
-
-    // MARK: - Notes Analysis
-
-    struct NoteSuggestionsResult {
-        let actions: [String]
-        let brainstorms: [String]
-    }
-
-    static func analyzeNotes(itemText: String, notes: String) async throws -> NoteSuggestionsResult {
-        let system = """
-            You analyze notes attached to a task and extract:
-            1. Follow-up action items (concrete, specific tasks)
-            2. Brainstorm ideas (observations, questions, directions to explore)
-            Respond ONLY with valid JSON:
-            {"actions": ["...", "..."], "brainstorms": ["...", "..."]}
-            Keep suggestions concise (1 sentence each). Return empty arrays if nothing applies.
-            """
-        let userMessage = "Task: \(itemText)\n\nNotes:\n\(notes)"
-        let response = try await client.send(system: system, userMessage: userMessage, maxTokens: 600)
-        let parsed = try parseJSON(response)
-        return NoteSuggestionsResult(
-            actions: (parsed["actions"] as? [String] ?? []).map { $0.trimmingCharacters(in: .whitespaces) },
-            brainstorms: (parsed["brainstorms"] as? [String] ?? []).map { $0.trimmingCharacters(in: .whitespaces) }
-        )
-    }
-
-    // MARK: - Redundancy Detection
-
-    struct RedundancyGroup: Identifiable {
-        let id = UUID()
-        let itemIds: [String]
-        let reason: String
-        let mergedText: String
-    }
-
-    static func findRedundancies(items: [(id: String, text: String, category: String)]) async throws -> [RedundancyGroup] {
-        guard !items.isEmpty else { return [] }
-        let itemsJSON = items.map { "{\"id\":\"\($0.id)\",\"text\":\"\($0.text.replacingOccurrences(of: "\"", with: "'"))\",\"category\":\"\($0.category)\"}" }.joined(separator: ",")
-        let system = """
-            Find groups of redundant or near-duplicate items.
-            Two items are redundant if they say essentially the same thing or one is a subset of the other.
-
-            For each group:
-            - ids: the item IDs that are redundant (minimum 2)
-            - reason: one short sentence explaining why they're duplicates
-            - merged_text: a single clean sentence capturing all meaning
-
-            Respond with ONLY valid JSON:
-            [{"ids": ["id1", "id2"], "reason": "...", "merged_text": "..."}]
-            If no redundancies exist, return: []
-            """
-
-        let response = try await client.send(system: system, userMessage: "[\(itemsJSON)]", maxTokens: 2000)
-        let cleaned = cleanJSON(response)
-        guard let data = cleaned.data(using: .utf8),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-
-        return arr.compactMap { obj in
-            guard let ids = obj["ids"] as? [String], ids.count >= 2,
-                  let reason = obj["reason"] as? String,
-                  let mergedText = obj["merged_text"] as? String else { return nil }
-            return RedundancyGroup(itemIds: ids, reason: reason, mergedText: mergedText)
-        }
     }
 
     // MARK: - Helpers

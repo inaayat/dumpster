@@ -240,7 +240,9 @@ struct Queries {
     static func getItemCountForTag(tagId: String) throws -> Int {
         try db.read { db in
             try Int.fetchOne(db, sql: """
-                SELECT COUNT(*) FROM item_tags WHERE tagId = ?
+                SELECT COUNT(*) FROM item_tags it
+                JOIN items i ON i.id = it.itemId
+                WHERE it.tagId = ? AND i.done = 0
                 """, arguments: [tagId]) ?? 0
         }
     }

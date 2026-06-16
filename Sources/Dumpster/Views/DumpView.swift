@@ -5,6 +5,7 @@ struct DumpView: View {
     @State private var todayDump: DailyDump?
     @State private var pastDumps: [DailyDump] = []
     @State private var content = ""
+    @State private var editorHeight: CGFloat = 300
     @State private var isAnalyzing = false
     @State private var proposedItems: [AIService.ProposedItem] = []
     @State private var suggestedTags: [AIService.SuggestedTag] = []
@@ -23,7 +24,6 @@ struct DumpView: View {
     @State private var docRefreshToken = 0
     @State private var editingBulletId: UUID? = nil
     @State private var editedBulletText = ""
-    @State private var showRetiredSection = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -47,13 +47,17 @@ struct DumpView: View {
             }
             .background(Theme.canvas)
 
-            if showMasterDocPanel, let tag = searchTag {
+            if showMasterDocPanel, let tag = searchTag,
+               let tagId = resolveTagId(tag) {
                 Divider()
-                MasterDocPanelView(tag: tag, onClose: {
-                    withAnimation { showMasterDocPanel = false }
-                }, onDocUpdated: {
-                    docRefreshToken += 1
-                })
+                MasterDocCore(
+                    tagId: tagId,
+                    tagDisplayName: tag,
+                    mode: .panel,
+                    showSubTagSettings: true,
+                    onClose: { withAnimation { showMasterDocPanel = false } },
+                    onDocUpdated: { docRefreshToken += 1 }
+                )
                 .frame(minWidth: 300, maxWidth: .infinity)
             }
         }
@@ -155,6 +159,8 @@ struct DumpView: View {
                 separator
                 magicTagLabel("#prio", color: Color.red)
                 separator
+                magicTagLabel("#backlog", color: Color.gray)
+                separator
                 magicTagLabel("#brainstorm", color: Theme.brainstormColor)
                 separator
                 magicTagLabel("#win", color: Theme.warnColor)
@@ -221,8 +227,17 @@ struct DumpView: View {
                                     }
                                 }, onRename: { oldName, newName in
                                     renameTag(oldName: oldName, newName: newName)
+                                }, onOpenDoc: {
+                                    openMasterDoc(tagName: tag)
                                 })
-                                .draggable(tag)
+                                .draggable(tag) {
+                                    Text("#\(tag)")
+                                        .font(.inter(12, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Theme.accent, in: Capsule())
+                                }
                                 .dropDestination(for: String.self) { dropped, _ in
                                     guard let source = dropped.first, source != tag else { return false }
                                     tagDropSource = source
@@ -299,9 +314,9 @@ struct DumpView: View {
             }
 
             ZStack(alignment: .topLeading) {
-                DumpTextEditor(text: $content, fontSize: 13)
-                    .frame(minHeight: 300)
-                    .fixedSize(horizontal: false, vertical: true)
+                DumpTextEditor(text: $content, fontSize: 13, focusOnAppear: true,
+                               onHeightChange: { h in editorHeight = max(300, h) })
+                    .frame(height: editorHeight)
                     .padding(12)
                     .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
                     .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.border, lineWidth: 1))
@@ -326,6 +341,7 @@ struct DumpView: View {
                                 let completedLine = lines[lines.count - 2]
                                 if !completedLine.trimmingCharacters(in: .whitespaces).isEmpty {
                                     updated = processLineIfNeeded(updated, line: completedLine)
+                                    processMagicTags(line: completedLine)
                                 }
                             }
                             updated += "• "
@@ -336,6 +352,7 @@ struct DumpView: View {
                             let lines = updated.components(separatedBy: "\n")
                             if let currentLine = lines.last, currentLine.contains("#") {
                                 updated = processLineIfNeeded(updated, line: currentLine)
+                                processMagicTags(line: currentLine)
                             }
                         }
 
@@ -561,17 +578,6 @@ struct DumpView: View {
                         }
                         Spacer()
 
-                        // Retire button
-                        Button {
-                            retireBullet(result: result)
-                        } label: {
-                            Image(systemName: "checkmark.circle")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.textMuted.opacity(0.4))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Retire this bullet")
-
                         // Add to doc button (only if not in doc and panel is open)
                         if !isInDoc && showMasterDocPanel {
                             Button {
@@ -593,54 +599,18 @@ struct DumpView: View {
                     .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(
                         isInDoc ? Theme.successColor.opacity(0.2) : (isSelected ? Theme.accent.opacity(0.5) : Theme.border), lineWidth: 1
                     ))
-                    .draggable(result.bulletText)
-                }
-
-                // Retired section
-                let retired = findRetiredBulletsByTag(tag)
-                if !retired.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) { showRetiredSection.toggle() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: showRetiredSection ? "chevron.down" : "chevron.right")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(Theme.textMuted)
-                                Text("Retired")
-                                    .font(.inter(11, weight: .medium))
-                                    .foregroundStyle(Theme.textMuted)
-                                Text("\(retired.count)")
-                                    .font(.inter(9))
-                                    .foregroundStyle(Theme.textMuted.opacity(0.6))
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 16)
-
-                        if showRetiredSection {
-                            ForEach(retired, id: \.id) { result in
-                                HStack(spacing: 8) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Theme.textMuted.opacity(0.3))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(result.dateDisplay)
-                                            .font(.inter(9))
-                                            .foregroundStyle(Theme.textMuted.opacity(0.5))
-                                        Text(stripTags(result.bulletText))
-                                            .font(.inter(12))
-                                            .foregroundStyle(Theme.textMuted.opacity(0.5))
-                                            .strikethrough()
-                                    }
-                                    Spacer()
-                                }
-                                .padding(8)
-                                .background(Theme.cardAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                            }
-                        }
+                    .draggable(result.bulletText) {
+                        Text(result.bulletText)
+                            .font(.inter(11))
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(2)
+                            .padding(8)
+                            .frame(maxWidth: 280, alignment: .leading)
+                            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: 6))
+                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                     }
                 }
+
             }
         }
     }
@@ -714,64 +684,13 @@ struct DumpView: View {
 
 
     private func processMagicTags(line: String) {
-        let bullet = DumpBullet.parse(from: line).first
-        guard let bullet, !bullet.magicTags.isEmpty else { return }
+        MagicTagProcessor.processLine(line)
+        appState.refreshCounts()
+    }
 
-        let cleanText = stripTags(bullet.text)
-        guard !cleanText.isEmpty else { return }
-
-        let isHighPrio = bullet.magicTags.contains(.prio)
-
-        for magic in bullet.magicTags {
-            switch magic {
-            case .action:
-                let item = Item.new(text: cleanText, category: .action, priority: isHighPrio ? .high : .medium)
-                try? Queries.addItem(item)
-                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
-                appState.refreshCounts()
-            case .brainstorm:
-                let item = Item.new(text: cleanText, category: .brainstorm)
-                try? Queries.addItem(item)
-                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
-                appState.refreshCounts()
-            case .resource:
-                let item = Item.new(text: cleanText, category: .resource)
-                try? Queries.addItem(item)
-                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
-                appState.refreshCounts()
-            case .win:
-                let win = Win.new(text: cleanText)
-                try? Queries.addWin(win)
-                appState.refreshCounts()
-            case .save:
-                for tagName in bullet.tags {
-                    if let tag = try? Queries.getOrCreateTag(name: tagName),
-                       let doc = try? Queries.getMasterDoc(tagId: tag.id) {
-                        let newContent = doc.content.isEmpty ? "• \(cleanText)" : "\(doc.content)\n• \(cleanText)"
-                        try? Queries.upsertMasterDoc(tagId: tag.id, content: newContent, title: doc.title)
-                    } else if let tag = try? Queries.getOrCreateTag(name: tagName) {
-                        let title = tagName.replacingOccurrences(of: "-", with: " ").capitalized
-                        try? Queries.upsertMasterDoc(tagId: tag.id, content: "• \(cleanText)", title: title)
-                    }
-                }
-            case .prio:
-                // If used alone (without #action), auto-create as high-prio action
-                if !bullet.magicTags.contains(.action) && !bullet.magicTags.contains(.brainstorm) {
-                    let item = Item.new(text: cleanText, category: .action, priority: .high)
-                    try? Queries.addItem(item)
-                    try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
-                    appState.refreshCounts()
-                }
-            case .delete:
-                // Find and delete items matching this bullet's text
-                if let allItems = try? Queries.searchItems(query: cleanText) {
-                    for item in allItems where stripTags(item.text).trimmingCharacters(in: .whitespaces) == cleanText {
-                        try? Queries.deleteItem(id: item.id)
-                    }
-                    appState.refreshCounts()
-                }
-            }
-        }
+    private func openMasterDoc(tagName: String) {
+        guard let tag = try? Queries.getOrCreateTag(name: tagName) else { return }
+        withAnimation { appState.openMasterDocPanel(tagId: tag.id) }
     }
 
     private func renameTag(oldName: String, newName: String) {
@@ -783,6 +702,10 @@ struct DumpView: View {
         }
         if searchTag == oldName { searchTag = newName }
         reload()
+    }
+
+    private func resolveTagId(_ name: String) -> String? {
+        (try? Queries.getOrCreateTag(name: name))?.id
     }
 
     private func stripTags(_ text: String) -> String {
@@ -808,40 +731,11 @@ struct DumpView: View {
         if let today = todayDump { allDumps.insert(today, at: 0) }
         for dump in allDumps {
             let bullets = DumpBullet.parse(from: dump.content)
-            for bullet in bullets where bullet.tags.contains(tag) && !bullet.isRetired {
+            for bullet in bullets where bullet.tags.contains(tag) {
                 results.append(TagSearchResult(id: UUID(), dumpId: dump.id, date: dump.date, dateDisplay: DailyDump.displayDate(dump.date), bulletText: bullet.text, rawLine: bullet.rawLine))
             }
         }
         return results
-    }
-
-    private func findRetiredBulletsByTag(_ tag: String) -> [TagSearchResult] {
-        var results: [TagSearchResult] = []
-        var allDumps = pastDumps
-        if let today = todayDump { allDumps.insert(today, at: 0) }
-        for dump in allDumps {
-            let bullets = DumpBullet.parse(from: dump.content)
-            for bullet in bullets where bullet.tags.contains(tag) && bullet.isRetired {
-                results.append(TagSearchResult(id: UUID(), dumpId: dump.id, date: dump.date, dateDisplay: DailyDump.displayDate(dump.date), bulletText: bullet.text, rawLine: bullet.rawLine))
-            }
-        }
-        return results
-    }
-
-    private func retireBullet(result: TagSearchResult) {
-        let marker = DumpBullet.retiredMarker
-        let isToday = result.date == DailyDump.today()
-
-        if isToday {
-            content = content.replacingOccurrences(of: result.rawLine, with: result.rawLine + marker)
-            saveDraft()
-        } else {
-            if let dump = pastDumps.first(where: { $0.id == result.dumpId }) {
-                let updated = dump.content.replacingOccurrences(of: result.rawLine, with: result.rawLine + marker)
-                try? Queries.updateDumpContent(id: dump.id, content: updated)
-                reload()
-            }
-        }
     }
 
     private func commitBulletEdit(result: TagSearchResult) {
@@ -939,13 +833,13 @@ struct DumpView: View {
 
     private func performMerge() {
         guard let source = mergeSource, let target = mergeTarget else { return }
-        content = content.replacingOccurrences(of: "#\(source)", with: "#\(target)")
-        saveDraft()
-        for dump in pastDumps {
-            let updated = dump.content.replacingOccurrences(of: "#\(source)", with: "#\(target)")
-            if updated != dump.content { try? Queries.updateDumpContent(id: dump.id, content: updated) }
+        if let sourceTag = try? Queries.getTagByName(source) {
+            try? Queries.renameTagEverywhere(id: sourceTag.id, oldName: source, newName: target)
         }
         mergeSource = nil; mergeTarget = nil
+        if let dump = try? Queries.getOrCreateTodayDump() {
+            content = dump.content
+        }
         reload()
     }
 
@@ -989,33 +883,12 @@ struct DumpView: View {
     }
 
     private func processLineIfNeeded(_ text: String, line: String) -> String {
-        var updated = text
         let bullet = DumpBullet.parse(from: line).first
-        guard let bullet else { return updated }
-
-        // Register any regular tags
+        guard let bullet else { return text }
         for tagName in bullet.tags {
             _ = try? Queries.getOrCreateTag(name: tagName)
         }
-
-        if bullet.isRetired {
-            // Already processed — but check if new tags were added that need associating
-            let cleanText = stripTags(bullet.text).trimmingCharacters(in: .whitespaces)
-            if !cleanText.isEmpty && !bullet.tags.isEmpty {
-                // Find the item by text match and associate new tags
-                if let items = try? Queries.searchItems(query: cleanText),
-                   let item = items.first(where: { stripTags($0.text) == cleanText }) {
-                    try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
-                }
-            }
-        } else if !bullet.magicTags.isEmpty {
-            // Has unprocessed magic tags — create item + retire
-            processMagicTags(line: line)
-            let retiredLine = line + DumpBullet.retiredMarker
-            updated = updated.replacingOccurrences(of: line, with: retiredLine)
-        }
-
-        return updated
+        return text
     }
 
     private func saveDraft() {
@@ -1030,28 +903,24 @@ struct DumpView: View {
         for tagName in allTags {
             _ = try? Queries.getOrCreateTag(name: tagName)
         }
+    }
 
-        // Process any non-retired bullets with magic tags (catches edge cases)
-        var contentChanged = false
-        var updatedContent = content
-        for bullet in bullets where !bullet.isRetired && !bullet.magicTags.isEmpty {
-            processMagicTags(line: bullet.rawLine)
-            let retiredLine = bullet.rawLine + DumpBullet.retiredMarker
-            updatedContent = updatedContent.replacingOccurrences(of: bullet.rawLine, with: retiredLine)
-            contentChanged = true
-        }
-
-        if contentChanged {
-            content = updatedContent
-            if let dump = todayDump {
-                try? Queries.updateDumpContent(id: dump.id, content: content)
-            }
-        }
+    private func stripAcknowledged(_ raw: String) -> String {
+        raw.components(separatedBy: "\n").map { line in
+            line.replacingOccurrences(of: " [acknowledged]", with: "")
+                .replacingOccurrences(of: "[acknowledged]", with: "")
+                .trimmingCharacters(in: .whitespaces)
+        }.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     private func reload() {
         todayDump = try? Queries.getOrCreateTodayDump()
-        content = todayDump?.content ?? ""
+        let raw = todayDump?.content ?? ""
+        let normalized = stripAcknowledged(raw)
+        content = normalized
+        if normalized != raw, let dump = todayDump {
+            try? Queries.updateDumpContent(id: dump.id, content: normalized)
+        }
         let all = (try? Queries.getAllDumps()) ?? []
         pastDumps = all.filter { $0.date != DailyDump.today() }
         // All high-prio items + overdue/due-today
@@ -1063,334 +932,6 @@ struct DumpView: View {
             if seenIds.insert(item.id).inserted { combined.append(item) }
         }
         attentionItems = combined
-    }
-}
-
-// MARK: - Master Doc Panel (slides in from right)
-
-struct MasterDocPanelView: View {
-    let tag: String
-    var onClose: () -> Void
-    var onDocUpdated: (() -> Void)? = nil
-
-    @State private var content = ""
-    @State private var title = ""
-    @State private var isSynthesizing = false
-    @State private var isInserting = false
-    @State private var isDragOver = false
-    @State private var fontSize: CGFloat = 13
-    @State private var highlightInsertions = false
-    @State private var synthesizedPreview: String?
-    @State private var showEmptyDocPrompt = false
-    @State private var pendingBullets: [String] = []
-    @State private var showSubTagSettings = false
-    @StateObject private var editorHandle = RichMarkdownEditorHandle()
-
-    var body: some View {
-        VStack(spacing: 0) {
-            panelHeader
-            Divider()
-            panelToolbar
-            Divider()
-
-            if isInserting {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("AI is placing bullets into the doc...")
-                        .font(.inter(11)).foregroundStyle(Theme.textMuted)
-                }
-                .padding(12)
-                Divider()
-            }
-
-            if let preview = synthesizedPreview {
-                synthesizePreviewSection(preview)
-                Divider()
-            }
-
-            // Editor with drop zone
-            ZStack {
-                RichMarkdownEditorWithHandle(markdown: $content, handle: editorHandle, fontSize: fontSize)
-                    .onChange(of: content) { saveDoc() }
-                    .opacity(highlightInsertions ? 0.85 : 1.0)
-                    .allowsHitTesting(!isDragOver)
-
-                if isDragOver {
-                    VStack(spacing: 10) {
-                        Image(systemName: "arrow.down.doc.fill").font(.system(size: 28)).foregroundStyle(Theme.accent)
-                        Text("Drop to AI-sort into doc").font(.inter(13, weight: .semibold)).foregroundStyle(Theme.accent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.accent.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.cornerRadius)
-                            .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [8]))
-                            .padding(8)
-                    )
-                }
-            }
-            .dropDestination(for: String.self) { dropped, _ in
-                isDragOver = false
-                let bullets = dropped.flatMap { $0.components(separatedBy: "\n") }.filter { !$0.isEmpty }
-                guard !bullets.isEmpty else { return false }
-                handleDroppedBullets(bullets)
-                return true
-            } isTargeted: { targeted in
-                isDragOver = targeted
-            }
-        }
-        .background(Theme.canvas)
-        .onAppear { loadDoc() }
-        .alert("Empty Document", isPresented: $showEmptyDocPrompt) {
-            Button("Create Sections") {
-                aiInsertBullets(pendingBullets, createStructure: true)
-            }
-            Button("Just Append") {
-                let joined = pendingBullets.map { "• \($0)" }.joined(separator: "\n")
-                content = joined
-                saveDoc()
-                onDocUpdated?()
-                pendingBullets = []
-            }
-            Button("Cancel", role: .cancel) { pendingBullets = [] }
-        } message: {
-            Text("This doc has no content yet. Should AI create sections from these bullets, or just append them as a list?")
-        }
-        .sheet(isPresented: $showSubTagSettings) {
-            subTagSettingsSheet
-        }
-    }
-
-    // MARK: - Header
-
-    private var panelHeader: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                TextField("Title", text: $title)
-                    .font(.inter(16, weight: .bold))
-                    .textFieldStyle(.plain)
-                    .onSubmit { saveDoc() }
-                Text("#\(tag)")
-                    .font(.inter(10, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-            }
-            Spacer()
-
-            Button { showSubTagSettings = true } label: {
-                Image(systemName: "gearshape").font(.system(size: 12)).foregroundStyle(Theme.textMuted)
-            }
-            .buttonStyle(.plain)
-            .help("Sub-tag settings")
-
-            Button { synthesize() } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "sparkles")
-                    Text(isSynthesizing ? "..." : "Synthesize")
-                }
-                .font(.inter(10, weight: .semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .controlSize(.small)
-            .disabled(isSynthesizing || content.isEmpty)
-
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(Theme.textMuted.opacity(0.5))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Theme.cardBg)
-    }
-
-    // MARK: - Toolbar
-
-    private var panelToolbar: some View {
-        HStack(spacing: 2) {
-            toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
-            toolbarBtn(icon: "italic") { editorHandle.toggleItalic() }
-            toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
-            toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
-            Divider().frame(height: 14).padding(.horizontal, 4)
-            toolbarBtn(icon: "textformat.size.smaller") { if fontSize > 10 { fontSize -= 1 } }
-            Text("\(Int(fontSize))").font(.inter(9)).foregroundStyle(Theme.textMuted).frame(width: 16)
-            toolbarBtn(icon: "textformat.size.larger") { if fontSize < 20 { fontSize += 1 } }
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(Theme.cardBg)
-    }
-
-    @ViewBuilder
-    private func toolbarBtn(icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textPrimary)
-                .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Synthesize Preview
-
-    @ViewBuilder
-    private func synthesizePreviewSection(_ preview: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("AI Synthesized (preview)")
-                .font(.inter(10, weight: .semibold))
-                .foregroundStyle(Theme.successColor)
-            ScrollView {
-                Text(preview)
-                    .font(.inter(12))
-                    .foregroundStyle(Theme.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 150)
-            .padding(8)
-            .background(Theme.successColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
-            HStack(spacing: 10) {
-                Button("Accept") {
-                    content = preview
-                    synthesizedPreview = nil
-                    saveDoc()
-                    onDocUpdated?()
-                }
-                .font(.inter(10, weight: .semibold))
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.successColor)
-                .controlSize(.mini)
-                Button("Dismiss") { synthesizedPreview = nil }
-                    .font(.inter(10)).foregroundStyle(Theme.textMuted).buttonStyle(.plain)
-            }
-        }
-        .padding(12)
-    }
-
-    // MARK: - Sub-tag Settings
-
-    @ViewBuilder
-    private var subTagSettingsSheet: some View {
-        let tagRecord = try? Queries.getTagByName(tag)
-        let subTags = tagRecord.flatMap { try? Queries.getSubTags(parentTagId: $0.id) } ?? []
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Sub-tag Settings").font(.inter(16, weight: .bold)).foregroundStyle(Theme.textPrimary)
-            Text("Sub-tags of #\(tag)").font(.inter(12)).foregroundStyle(Theme.textMuted)
-
-            if subTags.isEmpty {
-                Text("No sub-tags yet. Drag a tag onto this one in the Daily Dump tag bar.")
-                    .font(.inter(11)).foregroundStyle(Theme.textMuted).fixedSize(horizontal: false, vertical: true)
-            } else {
-                VStack(spacing: 6) {
-                    ForEach(subTags) { sub in
-                        HStack {
-                            Image(systemName: "number").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.accent)
-                            Text(sub.name).font(.inter(12, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                            Spacer()
-                            if let parentId = tagRecord?.id {
-                                Button {
-                                    try? Queries.removeSubTag(parentTagId: parentId, childTagId: sub.id)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill").font(.system(size: 14)).foregroundStyle(Theme.textMuted)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Theme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                }
-            }
-
-            Spacer()
-            HStack {
-                Spacer()
-                Button("Done") { showSubTagSettings = false }
-                    .font(.inter(12, weight: .semibold)).buttonStyle(.borderedProminent).tint(Theme.accent)
-            }
-        }
-        .padding(24)
-        .frame(width: 340, height: 320)
-    }
-
-    // MARK: - Logic
-
-    private func handleDroppedBullets(_ bullets: [String]) {
-        if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            pendingBullets = bullets
-            showEmptyDocPrompt = true
-        } else {
-            aiInsertBullets(bullets, createStructure: false)
-        }
-    }
-
-    private func aiInsertBullets(_ bullets: [String], createStructure: Bool) {
-        isInserting = true
-        let existing = createStructure ? "" : content
-        Task {
-            do {
-                let result = try await AIService.insertBulletsIntoDoc(existingContent: existing, bullets: bullets)
-                await MainActor.run {
-                    content = result
-                    saveDoc()
-                    isInserting = false
-                    highlightInsertions = true
-                    onDocUpdated?()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { highlightInsertions = false }
-                    pendingBullets = []
-                }
-            } catch {
-                await MainActor.run { isInserting = false; pendingBullets = [] }
-            }
-        }
-    }
-
-    private func synthesize() {
-        isSynthesizing = true
-        Task {
-            do {
-                // Gather ALL bullets with this tag from all dumps
-                let allDumps = (try? Queries.getAllDumps()) ?? []
-                var bulletTexts: [String] = []
-                for dump in allDumps {
-                    let bullets = DumpBullet.parse(from: dump.content)
-                    for bullet in bullets where !bullet.isRetired && bullet.tags.contains(tag.lowercased()) {
-                        bulletTexts.append(bullet.text)
-                    }
-                }
-                let bulletsStr = bulletTexts.isEmpty ? content : bulletTexts.joined(separator: "\n")
-                let result = try await AIService.synthesizeMasterDoc(existingContent: content, bullets: bulletsStr)
-                await MainActor.run {
-                    synthesizedPreview = result
-                    isSynthesizing = false
-                }
-            } catch {
-                await MainActor.run { isSynthesizing = false }
-            }
-        }
-    }
-
-    private func saveDoc() {
-        guard let tagRecord = try? Queries.getTagByName(tag) ?? Queries.getOrCreateTag(name: tag) else { return }
-        let docTitle = title.isEmpty ? tag.replacingOccurrences(of: "-", with: " ").capitalized : title
-        try? Queries.upsertMasterDoc(tagId: tagRecord.id, content: content, title: docTitle)
-    }
-
-    private func loadDoc() {
-        if let tagRecord = try? Queries.getTagByName(tag),
-           let doc = try? Queries.getMasterDoc(tagId: tagRecord.id) {
-            content = doc.content
-            title = doc.title
-        } else {
-            title = tag.replacingOccurrences(of: "-", with: " ").capitalized
-            // Auto-create the doc so it's ready
-            if let tagRecord = try? Queries.getOrCreateTag(name: tag) {
-                try? Queries.upsertMasterDoc(tagId: tagRecord.id, content: "", title: title)
-            }
-        }
     }
 }
 

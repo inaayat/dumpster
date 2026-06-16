@@ -79,6 +79,10 @@ struct DumpPanelContent: View {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         try? Queries.appendToDump(date: DailyDump.today(), bullet: trimmed)
+        MagicTagProcessor.processLine(trimmed)
+        for tagName in DumpBullet.extractTags(from: trimmed) {
+            _ = try? Queries.getOrCreateTag(name: tagName)
+        }
         text = ""
         withAnimation { saved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

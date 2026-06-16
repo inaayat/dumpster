@@ -21,8 +21,23 @@ struct ContentView: View {
                     .background(Theme.cardBg)
                     .transition(.move(edge: .trailing))
             }
+
+            if let tagId = appState.masterDocPanelTagId {
+                Divider().background(Theme.divider)
+
+                MasterDocCore(
+                    tagId: tagId,
+                    tagDisplayName: (try? Queries.getTag(id: tagId))?.name,
+                    mode: .panel,
+                    onClose: { withAnimation { appState.closeMasterDocPanel() } }
+                )
+                .frame(minWidth: 340, idealWidth: 420, maxWidth: 500)
+                .background(Theme.cardBg)
+                .transition(.move(edge: .trailing))
+            }
         }
         .animation(.easeInOut(duration: 0.25), value: appState.detailPanelItemId)
+        .animation(.easeInOut(duration: 0.25), value: appState.masterDocPanelTagId)
         .frame(minWidth: 800, minHeight: 560)
         .preferredColorScheme(Theme.colorScheme)
         .id(appState.broMode)

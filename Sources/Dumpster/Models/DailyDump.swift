@@ -42,10 +42,7 @@ struct DumpBullet: Identifiable {
     var text: String
     var tags: [String]
     var magicTags: [MagicTag]
-    var isRetired: Bool
     var rawLine: String
-
-    static let retiredMarker = " [acknowledged]"
 
     static func parse(from content: String) -> [DumpBullet] {
         content
@@ -55,12 +52,11 @@ struct DumpBullet: Identifiable {
                 var cleaned = line
                 if cleaned.hasPrefix("• ") { cleaned = String(cleaned.dropFirst(2)) }
                 else if cleaned.hasPrefix("* ") { cleaned = String(cleaned.dropFirst(2)) }
-                let retired = cleaned.hasSuffix(retiredMarker)
-                if retired { cleaned = String(cleaned.dropLast(retiredMarker.count)) }
+                cleaned = cleaned.trimmingCharacters(in: .whitespaces)
                 let allTags = extractTags(from: cleaned)
                 let magic = allTags.compactMap { MagicTag(rawValue: $0) }
                 let topicTags = allTags.filter { MagicTag(rawValue: $0) == nil }
-                return DumpBullet(text: cleaned, tags: topicTags, magicTags: magic, isRetired: retired, rawLine: line)
+                return DumpBullet(text: cleaned, tags: topicTags, magicTags: magic, rawLine: line)
             }
     }
 
@@ -82,5 +78,83 @@ enum MagicTag: String {
     case win
     case save
     case prio
+    case backlog
     case delete
+}
+
+enum MagicTagProcessor {
+    static func stripTags(_ text: String) -> String {
+        text.replacingOccurrences(of: #"#[\w\-]+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    static func processLine(_ line: String) {
+        let bullet = DumpBullet.parse(from: line).first
+        guard let bullet, !bullet.magicTags.isEmpty else { return }
+
+        let cleanText = stripTags(bullet.text)
+        guard !cleanText.isEmpty else { return }
+
+        let isHighPrio = bullet.magicTags.contains(.prio)
+        let isBacklog = bullet.magicTags.contains(.backlog)
+
+        for magic in bullet.magicTags {
+            switch magic {
+            case .action:
+                guard !itemAlreadyExists(text: cleanText) else { break }
+                let item = Item.new(text: cleanText, category: .action, priority: isHighPrio ? .high : isBacklog ? .backlog : .medium)
+                try? Queries.addItem(item)
+                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+            case .brainstorm:
+                guard !itemAlreadyExists(text: cleanText) else { break }
+                let item = Item.new(text: cleanText, category: .brainstorm)
+                try? Queries.addItem(item)
+                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+            case .resource:
+                guard !itemAlreadyExists(text: cleanText) else { break }
+                let item = Item.new(text: cleanText, category: .resource)
+                try? Queries.addItem(item)
+                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+            case .win:
+                let win = Win.new(text: cleanText)
+                try? Queries.addWin(win)
+            case .save:
+                for tagName in bullet.tags {
+                    guard let tag = try? Queries.getOrCreateTag(name: tagName) else { break }
+                    let existing = (try? Queries.getMasterDoc(tagId: tag.id))?.content ?? ""
+                    guard !existing.contains(cleanText) else { break }
+                    let newContent = existing.isEmpty ? "• \(cleanText)" : "\(existing)\n• \(cleanText)"
+                    let title = (try? Queries.getMasterDoc(tagId: tag.id))?.title
+                        ?? tagName.replacingOccurrences(of: "-", with: " ").capitalized
+                    try? Queries.upsertMasterDoc(tagId: tag.id, content: newContent, title: title)
+                }
+            case .prio:
+                if !bullet.magicTags.contains(.action) && !bullet.magicTags.contains(.brainstorm) {
+                    guard !itemAlreadyExists(text: cleanText) else { break }
+                    let item = Item.new(text: cleanText, category: .action, priority: .high)
+                    try? Queries.addItem(item)
+                    try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+                }
+            case .backlog:
+                if !bullet.magicTags.contains(.action) && !bullet.magicTags.contains(.brainstorm) {
+                    guard !itemAlreadyExists(text: cleanText) else { break }
+                    let item = Item.new(text: cleanText, category: .action, priority: .backlog)
+                    try? Queries.addItem(item)
+                    try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+                }
+            case .delete:
+                if let allItems = try? Queries.searchItems(query: cleanText) {
+                    for item in allItems where stripTags(item.text).trimmingCharacters(in: .whitespaces) == cleanText {
+                        try? Queries.deleteItem(id: item.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func itemAlreadyExists(text: String) -> Bool {
+        guard let existing = try? Queries.searchItems(query: text) else { return false }
+        return existing.contains { stripTags($0.text).trimmingCharacters(in: .whitespaces) == text }
+    }
 }

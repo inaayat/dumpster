@@ -1,5 +1,31 @@
 import SwiftUI
 
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        layout(subviews: subviews, width: proposal.width ?? 0).size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(subviews: subviews, width: bounds.width)
+        for (index, frame) in result.frames.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: .unspecified)
+        }
+    }
+    private func layout(subviews: Subviews, width: CGFloat) -> (size: CGSize, frames: [CGRect]) {
+        var frames: [CGRect] = []
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > width && x > 0 { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
+            rowHeight = max(rowHeight, size.height)
+            maxX = max(maxX, x + size.width)
+            x += size.width + spacing
+        }
+        return (CGSize(width: maxX, height: y + rowHeight), frames)
+    }
+}
+
 struct ItemDetailPanel: View {
     @Bindable var appState: AppState
     let itemId: String
@@ -10,6 +36,9 @@ struct ItemDetailPanel: View {
     @State private var notesText = ""
     @State private var notesDirty = false
     @State private var confirmDelete = false
+    @State private var addingTag = false
+    @State private var newTagText = ""
+    @State private var allTags: [Tag] = []
 
     var body: some View {
         if let item {
@@ -104,6 +133,51 @@ struct ItemDetailPanel: View {
             }
             Text(item.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
                 .font(.inter(11)).foregroundStyle(Theme.textMuted)
+            Spacer()
+            Menu {
+                ForEach(Priority.allCases, id: \.rawValue) { p in
+                    Button {
+                        var updated = item
+                        updated.priority = p
+                        try? Queries.updateItem(updated)
+                        loadData()
+                        appState.refreshCounts()
+                    } label: {
+                        Label(p.rawValue.capitalized, systemImage: priorityIcon(p))
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: priorityIcon(item.priority))
+                        .font(.system(size: 9, weight: .bold))
+                    Text(item.priority.rawValue.capitalized)
+                        .font(.inter(10, weight: .medium))
+                }
+                .foregroundStyle(priorityColor(item.priority))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(priorityColor(item.priority).opacity(0.12), in: Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+    }
+
+    private func priorityIcon(_ p: Priority) -> String {
+        switch p {
+        case .high: return "arrow.up.circle.fill"
+        case .medium: return "minus.circle"
+        case .low: return "arrow.down.circle"
+        case .backlog: return "archivebox"
+        }
+    }
+
+    private func priorityColor(_ p: Priority) -> Color {
+        switch p {
+        case .high: return Theme.brainstormColor
+        case .medium: return Theme.textMuted
+        case .low: return Theme.textMuted.opacity(0.6)
+        case .backlog: return Theme.textMuted.opacity(0.5)
         }
     }
 
@@ -111,20 +185,117 @@ struct ItemDetailPanel: View {
         Text(item.text).font(.inter(15)).foregroundStyle(Theme.textPrimary).textSelection(.enabled)
     }
 
-    @ViewBuilder
     private var tagsRow: some View {
-        if !tags.isEmpty {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            FlowLayout(spacing: 4) {
                 ForEach(tags) { tag in
-                    Text("#\(tag.name)")
-                        .font(.inter(10, weight: .medium))
-                        .foregroundStyle(Theme.accent)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Theme.accent.opacity(0.1), in: Capsule())
+                    HStack(spacing: 3) {
+                        Text("#\(tag.name)")
+                            .font(.inter(10, weight: .medium))
+                            .foregroundStyle(Theme.accent)
+                        Button {
+                            try? Queries.untagItem(itemId: itemId, tagId: tag.id)
+                            loadData()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(Theme.accent.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Theme.accent.opacity(0.1), in: Capsule())
+                    .contextMenu {
+                        Button {
+                            openMasterDoc(tagId: tag.id)
+                        } label: {
+                            Label("Open Master Doc", systemImage: "doc.text.fill")
+                        }
+                    }
+                }
+
+                if addingTag {
+                    HStack(spacing: 4) {
+                        Text("#").font(.inter(10)).foregroundStyle(Theme.textMuted)
+                        TextField("tag", text: $newTagText)
+                            .font(.inter(10))
+                            .textFieldStyle(.plain)
+                            .frame(width: 80)
+                            .onSubmit { commitNewTag() }
+                        Button {
+                            commitNewTag()
+                        } label: {
+                            Image(systemName: "return")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(Theme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        Button {
+                            addingTag = false
+                            newTagText = ""
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Theme.cardBg, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1))
+                } else {
+                    Button {
+                        addingTag = true
+                        newTagText = ""
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 20, height: 20)
+                            .background(Theme.accent.opacity(0.1), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if addingTag && !newTagText.isEmpty {
+                let currentTagIds = Set(tags.map(\.id))
+                let suggestions = allTags.filter {
+                    $0.name.localizedCaseInsensitiveContains(newTagText) &&
+                    !currentTagIds.contains($0.id)
+                }.prefix(4)
+                if !suggestions.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(Array(suggestions)) { tag in
+                            Button(tag.name) {
+                                try? Queries.tagItem(itemId: itemId, tagId: tag.id)
+                                addingTag = false
+                                newTagText = ""
+                                loadData()
+                            }
+                            .font(.inter(9))
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Theme.accent.opacity(0.08), in: Capsule())
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private func commitNewTag() {
+        let name = newTagText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !name.isEmpty else { addingTag = false; return }
+        if let tag = try? Queries.getOrCreateTag(name: name) {
+            try? Queries.tagItem(itemId: itemId, tagId: tag.id)
+        }
+        addingTag = false
+        newTagText = ""
+        loadData()
     }
 
     @ViewBuilder
@@ -199,11 +370,16 @@ struct ItemDetailPanel: View {
         loadData()
     }
 
+    private func openMasterDoc(tagId: String) {
+        withAnimation { appState.openMasterDocPanel(tagId: tagId) }
+    }
+
     private func loadData() {
         item = try? Queries.getItem(id: itemId)
         notesText = item?.notes ?? ""
         notesDirty = false
         tags = (try? Queries.getTagsForItem(itemId: itemId)) ?? []
         linkedItems = (try? Queries.getLinkedItems(itemId: itemId)) ?? []
+        allTags = (try? Queries.getAllTags()) ?? []
     }
 }

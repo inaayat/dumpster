@@ -17,6 +17,7 @@ struct ItemsView: View {
     @State private var counts: [String: Int] = [:]
     @State private var collapsedTags: Set<String> = []
     @State private var stableTagOrder: [String] = []
+    @State private var backlogCollapsed = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -133,7 +134,9 @@ struct ItemsView: View {
                     ItemCard(item: item, tags: itemTags[item.id] ?? [],
                         onTap: { appState.openDetail(itemId: item.id) },
                         onComplete: { try? Queries.completeItem(id: item.id); appState.refreshCounts(); reload() },
-                        onDateChanged: { reload() })
+                        onDelete: { try? Queries.deleteItem(id: item.id); appState.refreshCounts(); reload() },
+                        onDateChanged: { reload() },
+                        onOpenDoc: { tagId in openMasterDoc(tagId: tagId) })
                 }
             }
         }
@@ -147,10 +150,17 @@ struct ItemsView: View {
                     appState.refreshCounts()
                     reload()
                 },
-                onDateChanged: { reload() }
+                onDelete: {
+                    try? Queries.deleteItem(id: item.id)
+                    appState.refreshCounts()
+                    reload()
+                },
+                onDateChanged: { reload() },
+                onOpenDoc: { tagId in openMasterDoc(tagId: tagId) }
             )
         }
         if sortedItems.isEmpty && newItems.isEmpty { emptyState }
+        backlogSection
     }
 
     @ViewBuilder
@@ -182,7 +192,13 @@ struct ItemsView: View {
                             appState.refreshCounts()
                             reload()
                         },
-                        onDateChanged: { reload() }
+                        onDelete: {
+                            try? Queries.deleteItem(id: item.id)
+                            appState.refreshCounts()
+                            reload()
+                        },
+                        onDateChanged: { reload() },
+                        onOpenDoc: { tagId in openMasterDoc(tagId: tagId) }
                     )
                 }
             }
@@ -219,6 +235,22 @@ struct ItemsView: View {
                             .font(.inter(9))
                             .foregroundStyle(Theme.textMuted)
                         Spacer()
+                        if group.tag != nil {
+                            Button {
+                                for var item in group.items where item.priority != .backlog {
+                                    item.priority = .backlog
+                                    try? Queries.updateItem(item)
+                                }
+                                appState.refreshCounts()
+                                reload()
+                            } label: {
+                                Image(systemName: "archivebox")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Backlog all items in this tag")
+                        }
                     }
                 }
                 .buttonStyle(.plain)
@@ -235,13 +267,20 @@ struct ItemsView: View {
                                 appState.refreshCounts()
                                 reload()
                             },
-                            onDateChanged: { reload() }
+                            onDelete: {
+                                try? Queries.deleteItem(id: item.id)
+                                appState.refreshCounts()
+                                reload()
+                            },
+                            onDateChanged: { reload() },
+                            onOpenDoc: { tagId in openMasterDoc(tagId: tagId) }
                         )
                     }
                 }
             }
         }
         if sortedItems.isEmpty { emptyState }
+        backlogSection
     }
 
     @ViewBuilder
@@ -256,6 +295,57 @@ struct ItemsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
+    }
+
+    @ViewBuilder
+    private var backlogSection: some View {
+        if !backlogItems.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { backlogCollapsed.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: backlogCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Theme.textMuted)
+                        Image(systemName: "archivebox")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Theme.textMuted)
+                        Text("Backlog")
+                            .font(.inter(12, weight: .semibold))
+                            .foregroundStyle(Theme.textMuted)
+                        Text("\(backlogItems.count)")
+                            .font(.inter(9))
+                            .foregroundStyle(Theme.textMuted)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
+
+                if !backlogCollapsed {
+                    ForEach(backlogItems) { item in
+                        ItemCard(
+                            item: item,
+                            tags: itemTags[item.id] ?? [],
+                            onTap: { appState.openDetail(itemId: item.id) },
+                            onComplete: {
+                                try? Queries.completeItem(id: item.id)
+                                appState.refreshCounts()
+                                reload()
+                            },
+                            onDelete: {
+                                try? Queries.deleteItem(id: item.id)
+                                appState.refreshCounts()
+                                reload()
+                            },
+                            onDateChanged: { reload() },
+                            onOpenDoc: { tagId in openMasterDoc(tagId: tagId) }
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private struct TagGroup: Identifiable {
@@ -321,7 +411,7 @@ struct ItemsView: View {
 
     private var sortedItems: [Item] {
         let newIds = Set(newItems.map(\.id))
-        return items.filter { !newIds.contains($0.id) }.sorted { a, b in
+        return items.filter { !newIds.contains($0.id) && $0.priority != .backlog }.sorted { a, b in
             if a.priority.sortOrder != b.priority.sortOrder {
                 return a.priority.sortOrder < b.priority.sortOrder
             }
@@ -334,10 +424,19 @@ struct ItemsView: View {
         }
     }
 
+    private var backlogItems: [Item] {
+        items.filter { $0.priority == .backlog }.sorted { $0.createdAt > $1.createdAt }
+    }
+
     private func resetTagOrder() {
         stableTagOrder = []
         let groups = groupItemsByTag(excludeHighPrio: true)
         stableTagOrder = groups.map(\.id)
+        collapsedTags = Set(stableTagOrder)
+    }
+
+    private func openMasterDoc(tagId: String) {
+        withAnimation { appState.openMasterDocPanel(tagId: tagId) }
     }
 
     private func reload() {

@@ -87,9 +87,9 @@ struct DumpsterFirePackage: DesignPackage {
     let successColor = Color(hex: "#2D8A7E")
 
     let cornerRadius: CGFloat = 10
-    let cardPadding: CGFloat = 14
+    let cardPadding: CGFloat = 8
     let sectionSpacing: CGFloat = 20
-    let itemSpacing: CGFloat = 8
+    let itemSpacing: CGFloat = 4
 
     let colorScheme: ColorScheme? = .light
 }
@@ -129,9 +129,9 @@ struct BroPackage: DesignPackage {
     let successColor = Color(hex: "#3BA99C")
 
     let cornerRadius: CGFloat = 10
-    let cardPadding: CGFloat = 14
+    let cardPadding: CGFloat = 8
     let sectionSpacing: CGFloat = 20
-    let itemSpacing: CGFloat = 8
+    let itemSpacing: CGFloat = 4
 
     let colorScheme: ColorScheme? = .dark
 }

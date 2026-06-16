@@ -25,6 +25,10 @@ struct DumpsterApp: App {
                 }
             }
 
+            Button("Export Data...") {
+                ExportService.exportMarkdown()
+            }
+
             Divider()
 
             Button("Quit") {

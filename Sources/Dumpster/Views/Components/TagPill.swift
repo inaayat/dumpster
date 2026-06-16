@@ -5,6 +5,7 @@ struct TagPill: View {
     var isSelected: Bool = false
     var action: () -> Void
     var onRename: ((String, String) -> Void)?
+    var onOpenDoc: (() -> Void)?
 
     @State private var isEditing = false
     @State private var editText = ""
@@ -51,6 +52,15 @@ struct TagPill: View {
             }
             .onTapGesture(count: 1) {
                 action()
+            }
+            .contextMenu {
+                if let onOpenDoc {
+                    Button {
+                        onOpenDoc()
+                    } label: {
+                        Label("Open Master Doc", systemImage: "doc.text.fill")
+                    }
+                }
             }
         }
     }

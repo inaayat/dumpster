@@ -5,7 +5,9 @@ struct ItemCard: View {
     var tags: [Tag] = []
     var onTap: () -> Void = {}
     var onComplete: (() -> Void)?
+    var onDelete: (() -> Void)?
     var onDateChanged: (() -> Void)?
+    var onOpenDoc: ((String) -> Void)?
 
     @State private var showDatePicker = false
     @State private var editedDate = Date()
@@ -18,13 +20,13 @@ struct ItemCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             if item.category == .action {
                 Button {
                     onComplete?()
                 } label: {
                     Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
+                        .font(.system(size: 14))
                         .foregroundStyle(item.done ? Theme.successColor : Theme.textMuted.opacity(0.4))
                 }
                 .buttonStyle(.plain)
@@ -32,9 +34,9 @@ struct ItemCard: View {
                 CategoryBadge(category: item.category)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(displayText)
-                    .font(.inter(13))
+                    .font(.inter(12))
                     .foregroundStyle(item.done ? Theme.textMuted : Theme.textPrimary)
                     .strikethrough(item.done)
                     .lineLimit(2)
@@ -45,6 +47,13 @@ struct ItemCard: View {
                             Text("#\(tag.name)")
                                 .font(.inter(9))
                                 .foregroundStyle(Theme.accent)
+                                .contextMenu {
+                                    Button {
+                                        onOpenDoc?(tag.id)
+                                    } label: {
+                                        Label("Open Master Doc", systemImage: "doc.text.fill")
+                                    }
+                                }
                         }
                     }
                 }
@@ -71,6 +80,17 @@ struct ItemCard: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+            }
+
+            if let onDelete {
+                Button {
+                    onDelete()
+                } label: {
+                    Text("🗑️")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .help("Delete item")
             }
         }
         .padding(Theme.cardPadding)
