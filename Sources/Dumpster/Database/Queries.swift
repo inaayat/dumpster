@@ -181,12 +181,18 @@ struct Queries {
             }
         }
 
-        // Update all dump content
+        // Update all dump content (use word-boundary regex to avoid partial matches)
         let allDumps = try getAllDumps()
+        let oldPattern = "#\(NSRegularExpression.escapedPattern(for: normalizedOld))(?![\\w\\-])"
+        let altPattern = "#\(NSRegularExpression.escapedPattern(for: oldName))(?![\\w\\-])"
         for dump in allDumps {
-            let updated = dump.content
-                .replacingOccurrences(of: "#\(normalizedOld)", with: "#\(normalizedNew)")
-                .replacingOccurrences(of: "#\(oldName)", with: "#\(normalizedNew)")
+            var updated = dump.content
+            if let regex = try? NSRegularExpression(pattern: oldPattern, options: .caseInsensitive) {
+                updated = regex.stringByReplacingMatches(in: updated, range: NSRange(updated.startIndex..., in: updated), withTemplate: "#\(normalizedNew)")
+            }
+            if normalizedOld != oldName.lowercased(), let regex = try? NSRegularExpression(pattern: altPattern, options: .caseInsensitive) {
+                updated = regex.stringByReplacingMatches(in: updated, range: NSRange(updated.startIndex..., in: updated), withTemplate: "#\(normalizedNew)")
+            }
             if updated != dump.content {
                 try updateDumpContent(id: dump.id, content: updated)
             }

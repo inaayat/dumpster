@@ -184,6 +184,19 @@ struct TagsView: View {
                         } label: {
                             Label("Open Master Doc", systemImage: "doc.text.fill")
                         }
+                        Button {
+                            renameText = tag.name
+                            renamingTagId = tag.id
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            try? Queries.deleteTag(id: tag.id)
+                            reload()
+                        } label: {
+                            Label("Delete Tag", systemImage: "trash")
+                        }
                     }
                 }
             }

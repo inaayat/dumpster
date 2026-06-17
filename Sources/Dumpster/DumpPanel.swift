@@ -65,9 +65,10 @@ struct DumpPanelContent: View {
             TextField("Add a bullet to today's dump...", text: $text)
                 .textFieldStyle(.plain)
                 .font(.inter(14))
+                .foregroundStyle(.black)
                 .padding(10)
-                .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.border, lineWidth: 1))
+                .background(.white, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Color.gray.opacity(0.3), lineWidth: 1))
                 .onSubmit { save() }
         }
         .padding(16)

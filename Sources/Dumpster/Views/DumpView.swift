@@ -229,6 +229,8 @@ struct DumpView: View {
                                     renameTag(oldName: oldName, newName: newName)
                                 }, onOpenDoc: {
                                     openMasterDoc(tagName: tag)
+                                }, onDelete: {
+                                    deleteTag(name: tag)
                                 })
                                 .draggable(tag) {
                                     Text("#\(tag)")
@@ -347,12 +349,12 @@ struct DumpView: View {
                             updated += "• "
                         }
 
-                        // Space after #tag — check current line for new tags/magic tags
+                        // Space after #tag — register tags in DB but don't process magic tags yet
+                        // (magic tags fire on Enter, after all tags on the line have been typed)
                         if updated.hasSuffix(" ") {
                             let lines = updated.components(separatedBy: "\n")
                             if let currentLine = lines.last, currentLine.contains("#") {
                                 updated = processLineIfNeeded(updated, line: currentLine)
-                                processMagicTags(line: currentLine)
                             }
                         }
 
@@ -694,13 +696,33 @@ struct DumpView: View {
     }
 
     private func renameTag(oldName: String, newName: String) {
-        guard let tag = try? Queries.getTagByName(oldName) else { return }
-        try? Queries.renameTagEverywhere(id: tag.id, oldName: oldName, newName: newName)
-        // Update local content if today's dump was affected
+        if let tag = try? Queries.getTagByName(oldName) {
+            try? Queries.renameTagEverywhere(id: tag.id, oldName: oldName, newName: newName)
+        } else {
+            // Tag doesn't exist in DB (orphaned in dump text) — just fix the text
+            let normalized = newName.lowercased().trimmingCharacters(in: .whitespaces)
+            let pattern = "#\(NSRegularExpression.escapedPattern(for: oldName.lowercased()))(?![\\w\\-])"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let allDumps = (try? Queries.getAllDumps()) ?? []
+                for dump in allDumps {
+                    let updated = regex.stringByReplacingMatches(in: dump.content, range: NSRange(dump.content.startIndex..., in: dump.content), withTemplate: "#\(normalized)")
+                    if updated != dump.content {
+                        try? Queries.updateDumpContent(id: dump.id, content: updated)
+                    }
+                }
+            }
+        }
         if let dump = try? Queries.getOrCreateTodayDump() {
             content = dump.content
         }
         if searchTag == oldName { searchTag = newName }
+        reload()
+    }
+
+    private func deleteTag(name: String) {
+        guard let tag = try? Queries.getTagByName(name) else { return }
+        try? Queries.deleteTag(id: tag.id)
+        if searchTag == name { searchTag = nil }
         reload()
     }
 

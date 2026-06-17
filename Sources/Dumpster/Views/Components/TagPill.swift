@@ -6,6 +6,7 @@ struct TagPill: View {
     var action: () -> Void
     var onRename: ((String, String) -> Void)?
     var onOpenDoc: (() -> Void)?
+    var onDelete: (() -> Void)?
 
     @State private var isEditing = false
     @State private var editText = ""
@@ -59,6 +60,22 @@ struct TagPill: View {
                         onOpenDoc()
                     } label: {
                         Label("Open Master Doc", systemImage: "doc.text.fill")
+                    }
+                }
+                if onRename != nil {
+                    Button {
+                        editText = tag
+                        isEditing = true
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                }
+                if let onDelete {
+                    Divider()
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("Delete Tag", systemImage: "trash")
                     }
                 }
             }

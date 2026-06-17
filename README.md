@@ -8,9 +8,9 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 
 1. **Dump** — Open the app, type freely. Each line is a bullet.
 2. **Tag** — Use `#hashtags` inline to organize by topic.
-3. **Magic tags** — Special tags auto-create items (processed on space or Enter):
+3. **Magic tags** — Special tags auto-create items (processed on Enter — type all your tags first):
    - `#action` → creates an action item (green)
-   - `#prio` → makes it high priority (orange)
+   - `#prio` → makes it high priority; combine with `#action` or use alone (orange)
    - `#brainstorm` → creates a brainstorm item (teal)
    - `#win` → logs an achievement (gold)
    - `#save` → appends bullet to all tagged Master Docs (blue)
@@ -24,15 +24,16 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 ## Features
 
 ### Daily Dump (Home)
-- Freeform daily notepad with auto-bullet formatting (type `*` or press Enter for new bullet)
-- Magic tag processing on space or Enter — zero-click item creation
+- Freeform daily notepad — editor grows smoothly as you type
+- Auto-bullet formatting (type `*` or press Enter for new bullet)
+- Magic tags fire on **Enter** — all tags on the line are read before creating items, so `#action #prio` always produces a high-priority item
 - Magic tags render in color inline as you type (green, orange, teal, gold, grey)
-- `#prio` tag creates high-priority actions instantly
 - `#delete` tag deletes matching items (line shows struck-through red italic)
 - Processed bullets marked `[acknowledged]` to prevent duplicates
 - Adding a `#tag` to any bullet at any time registers it immediately
 - Attention bar showing ALL high-priority + overdue items (always expanded)
 - Tag pills bar with search, merge, sub-tag creation, and inline rename (double-click)
+- Drag any tag pill onto another to merge them — updates everywhere
 - "Analyze with AI" for batch extraction of items
 - Past days expandable with per-day AI analysis
 - Double-click bullets in tag search to edit inline
@@ -55,27 +56,30 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 - Hierarchical: parent tags with expandable sub-tags
 - Created automatically from `#hashtags` in your dumps
 - Double-click to rename — updates everywhere (dumps, docs, items, relationships)
+- Rename to an existing tag → they merge automatically
+- Right-click any tag anywhere in the app → **Open Master Doc** (slides in a panel from the right)
+- Right-click → **Delete Tag** to remove it
+- Drag tags onto each other to merge or create parent-child relationships
 - Click a tag → see its items + Master Doc side-by-side
-- Drag items into the Master Doc panel to incorporate (AI sorts, item shades)
-- Drag tags to merge or create parent-child relationships
+- Dragging shows a visual preview of the item or tag being moved
 
 ### Master Docs
 - Per-topic persistent documents tied to tags
-- Rich text editor: headings render bold (no raw ##), bullets render as actual bullet points
-- Tab/Shift-Tab for indentation, Enter continues bullets
-- Bold and italic inline formatting
+- Header shows the parent tag + all sub-tags at a glance
+- **Rich text editor** with full keyboard support:
+  - `Cmd+B` / `Cmd+I` / `Cmd+U` → bold / italic / underline
+  - `Cmd+Shift+X` → strikethrough
+  - `Tab` / `Shift-Tab` → indent / outdent bullets
+  - `Enter` continues the current list type (bullet, numbered, checklist)
+- Formatting toolbar: Bold, Italic, Underline, Strikethrough, Bullet, Numbered list, Checklist, Heading menu (H1/H2/H3), font size
 - AI-powered drag-to-insert: drop bullets or items, AI places them in the right section
-- Drag items from tag detail view → AI sorts + marks item as "incorporated" (shaded, bottom)
+- Drag items from Items view → AI sorts + marks item as "incorporated" (shaded, bottom)
 - Empty doc prompt: "Create sections from AI?" vs "Just append as list?"
-- Batch selection: checkbox bullets → "Send to doc" → AI integrates
-- "In doc" indicators (green checkmark on processed bullets, sorted to bottom)
-- AI Synthesize: gathers ALL bullets with that tag from all dumps, restructures into clean doc
+- **AI Synthesize**: gathers all bullets tagged with this tag OR any of its sub-tags, restructures into clean doc
 - Synthesize preview with Accept/Dismiss before committing
-- Highlight flash after AI insertion so you can see what was added
-- Formatting toolbar: Bold, Italic, Bullet list, Heading, font size controls
 - Editable title field
 - Sub-tag settings (gear icon)
-- Accessible from tag search panel, tag detail view, or Docs sidebar tab
+- Accessible from right-click on any tag, tag detail view, or Docs sidebar tab
 
 ### Wins
 - Standalone achievement log (no dummy parent item needed)

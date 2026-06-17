@@ -25,6 +25,7 @@ struct MasterDocCore: View {
     @State private var pendingItemId: String?
     @State private var confirmDelete = false
     @State private var showSubTagSheet = false
+    @State private var subTags: [Tag] = []
     @StateObject private var editorHandle = RichMarkdownEditorHandle()
 
     var body: some View {
@@ -96,15 +97,25 @@ struct MasterDocCore: View {
 
     private var panelHeader: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 TextField("Title", text: $title)
                     .font(.inter(16, weight: .bold))
                     .textFieldStyle(.plain)
                     .onSubmit { saveDoc() }
-                if let name = tagDisplayName {
-                    Text("#\(name)")
-                        .font(.inter(10, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
+                HStack(spacing: 4) {
+                    if let name = tagDisplayName {
+                        Text("#\(name)")
+                            .font(.inter(10, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    ForEach(subTags) { sub in
+                        Text("#\(sub.name)")
+                            .font(.inter(9, weight: .medium))
+                            .foregroundStyle(Theme.textMuted)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Theme.cardAlt, in: Capsule())
+                    }
                 }
             }
             Spacer()
@@ -169,12 +180,18 @@ struct MasterDocCore: View {
         HStack(spacing: 2) {
             toolbarBtn(icon: "bold") { editorHandle.toggleBold() }
             toolbarBtn(icon: "italic") { editorHandle.toggleItalic() }
+            toolbarBtn(icon: "underline") { editorHandle.toggleUnderline() }
+            toolbarBtn(icon: "strikethrough") { editorHandle.toggleStrikethrough() }
+            Divider().frame(height: 14).padding(.horizontal, 4)
             toolbarBtn(icon: "list.bullet") { editorHandle.toggleBullet() }
-            toolbarBtn(icon: "number") { editorHandle.toggleHeading() }
+            toolbarBtn(icon: "list.number") { editorHandle.toggleNumberedList() }
+            toolbarBtn(icon: "checklist") { editorHandle.toggleChecklist() }
+            Divider().frame(height: 14).padding(.horizontal, 4)
+            headingMenu
             Divider().frame(height: 14).padding(.horizontal, 4)
             toolbarBtn(icon: "textformat.size.smaller") { if fontSize > 10 { fontSize -= 1 } }
             Text("\(Int(fontSize))").font(.inter(9)).foregroundStyle(Theme.textMuted).frame(width: 16)
-            toolbarBtn(icon: "textformat.size.larger") { if fontSize < 20 { fontSize += 1 } }
+            toolbarBtn(icon: "textformat.size.larger") { if fontSize < 24 { fontSize += 1 } }
 
             if mode == .page {
                 Divider().frame(height: 14).padding(.horizontal, 4)
@@ -186,6 +203,22 @@ struct MasterDocCore: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(Theme.cardBg)
+    }
+
+    private var headingMenu: some View {
+        Menu {
+            Button("Title") { editorHandle.toggleHeading(level: 1) }
+            Button("Heading") { editorHandle.toggleHeading(level: 2) }
+            Button("Subheading") { editorHandle.toggleHeading(level: 3) }
+        } label: {
+            Image(systemName: "textformat.size")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -385,11 +418,17 @@ struct MasterDocCore: View {
             do {
                 var bulletsStr = content
                 if let name = tagDisplayName {
+                    // Collect tag names: this tag + all sub-tags
+                    var tagNames = Set([name.lowercased()])
+                    if let subTags = try? Queries.getSubTags(parentTagId: tagId) {
+                        for sub in subTags { tagNames.insert(sub.name.lowercased()) }
+                    }
+
                     let allDumps = (try? Queries.getAllDumps()) ?? []
                     var bulletTexts: [String] = []
                     for dump in allDumps {
                         let bullets = DumpBullet.parse(from: dump.content)
-                        for bullet in bullets where bullet.tags.contains(name.lowercased()) {
+                        for bullet in bullets where !tagNames.isDisjoint(with: bullet.tags.map { $0.lowercased() }) {
                             bulletTexts.append(bullet.text)
                         }
                     }
@@ -414,6 +453,7 @@ struct MasterDocCore: View {
         let tag = try? Queries.getTag(id: tagId)
         content = doc?.content ?? ""
         title = doc?.title ?? (tagDisplayName ?? tag?.name ?? "Untitled").replacingOccurrences(of: "-", with: " ").capitalized
+        subTags = (try? Queries.getSubTags(parentTagId: tagId)) ?? []
         if doc == nil {
             try? Queries.upsertMasterDoc(tagId: tagId, content: "", title: title)
         }

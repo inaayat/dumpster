@@ -102,10 +102,17 @@ enum MagicTagProcessor {
         for magic in bullet.magicTags {
             switch magic {
             case .action:
-                guard !itemAlreadyExists(text: cleanText) else { break }
-                let item = Item.new(text: cleanText, category: .action, priority: isHighPrio ? .high : isBacklog ? .backlog : .medium)
-                try? Queries.addItem(item)
-                try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+                if let existing = existingItem(text: cleanText) {
+                    // Upgrade priority if #prio is now present and item is at lower priority
+                    if isHighPrio && existing.priority != .high {
+                        var upgraded = existing; upgraded.priority = .high
+                        try? Queries.updateItem(upgraded)
+                    }
+                } else {
+                    let item = Item.new(text: cleanText, category: .action, priority: isHighPrio ? .high : isBacklog ? .backlog : .medium)
+                    try? Queries.addItem(item)
+                    try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
+                }
             case .brainstorm:
                 guard !itemAlreadyExists(text: cleanText) else { break }
                 let item = Item.new(text: cleanText, category: .brainstorm)
@@ -153,8 +160,12 @@ enum MagicTagProcessor {
         }
     }
 
+    private static func existingItem(text: String) -> Item? {
+        guard let existing = try? Queries.searchItems(query: text) else { return nil }
+        return existing.first { stripTags($0.text).trimmingCharacters(in: .whitespaces) == text }
+    }
+
     private static func itemAlreadyExists(text: String) -> Bool {
-        guard let existing = try? Queries.searchItems(query: text) else { return false }
-        return existing.contains { stripTags($0.text).trimmingCharacters(in: .whitespaces) == text }
+        existingItem(text: text) != nil
     }
 }
