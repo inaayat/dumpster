@@ -1,5 +1,9 @@
 # Dumpster
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/inaayat/dumpster/main/install.sh | bash
+```
+
 A native macOS app for dumping your thoughts and turning them into organized work. Playful, fast, local-first.
 
 ---
