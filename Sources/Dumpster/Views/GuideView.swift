@@ -21,13 +21,69 @@ struct GuideView: View {
 
                 Divider()
 
-                // Workflow
-                guideSection("Your Workflow", icon: "arrow.right.circle.fill") {
-                    step("1", "Dump", "Open the app → type freely in the Daily Dump. The editor grows as you type.")
-                    step("2", "Tag", "Add #hashtags inline to organize by topic. Tags become your projects.")
-                    step("3", "Magic Tags", "Use special tags to instantly create items on Enter (see below).")
-                    step("4", "Review", "Hit 'Analyze with AI' for ambiguous bullets — AI proposes items and tags.")
-                    step("5", "Build Knowledge", "Right-click any tag → Open Master Doc → drag bullets in. AI organizes them.")
+                // Visual Flow
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("The Flow")
+                        .font(.inter(16, weight: .bold))
+                        .foregroundStyle(Theme.textPrimary)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 0) {
+                            flowCard(
+                                icon: "square.and.pencil",
+                                color: Theme.accent,
+                                title: "Dump",
+                                detail: "Open the app. Type one thought per bullet — no structure needed."
+                            )
+                            flowArrow()
+                            flowCard(
+                                icon: "number",
+                                color: Color.blue.opacity(0.85),
+                                title: "Tag",
+                                detail: "Add #hashtags inline as you type. Tags auto-register — no setup."
+                            )
+                            flowArrow()
+                            flowCard(
+                                icon: "wand.and.stars",
+                                color: Theme.successColor,
+                                title: "Magic Tags",
+                                detail: "Type #action #prio then press Enter → high-priority item created instantly."
+                            )
+                            flowArrow()
+                            flowCard(
+                                icon: "square.stack.fill",
+                                color: Theme.brainstormColor,
+                                title: "Triage",
+                                detail: "Items land in Actions, Brainstorms, and Resources. Set due dates, mark done."
+                            )
+                            flowArrow()
+                            flowCard(
+                                icon: "doc.text.fill",
+                                color: Theme.warnColor,
+                                title: "Master Docs",
+                                detail: "Right-click any tag → Open Master Doc. Drag bullets in — AI organizes them."
+                            )
+                            flowArrow()
+                            flowCard(
+                                icon: "sparkles",
+                                color: Theme.accent,
+                                title: "Synthesize",
+                                detail: "Hit Synthesize to let AI rewrite the doc from all bullets with that tag."
+                            )
+                        }
+                        .padding(.bottom, 4)
+                    }
+
+                    // Knowledge loop note
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.textMuted)
+                        Text("The loop: every new bullet you tag feeds into that tag's Master Doc via Synthesize.")
+                            .font(.inter(11))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    .padding(.top, 2)
                 }
 
                 // Magic Tags
@@ -166,5 +222,41 @@ struct GuideView: View {
                 .font(.inter(12))
                 .foregroundStyle(Theme.textSecondary)
         }
+    }
+
+    private func flowCard(icon: String, color: Color, title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            Text(title)
+                .font(.inter(13, weight: .bold))
+                .foregroundStyle(Theme.textPrimary)
+            Text(detail)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+        }
+        .frame(width: 148)
+        .padding(14)
+        .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cornerRadius)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        )
+    }
+
+    private func flowArrow() -> some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Theme.textMuted.opacity(0.5))
+            .frame(width: 24)
+            .padding(.top, 30)
     }
 }
