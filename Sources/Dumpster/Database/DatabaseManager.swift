@@ -108,6 +108,14 @@ final class DatabaseManager: Sendable {
             }
         }
 
+        migrator.registerMigration("v3_hiddenBullets") { db in
+            try db.create(table: "hidden_bullets") { t in
+                t.column("id", .text).primaryKey()
+                t.column("bulletText", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 }

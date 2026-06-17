@@ -12,6 +12,10 @@ struct TagsView: View {
     @State private var mergeSource: Tag? = nil
     @State private var mergeTarget: Tag? = nil
     @State private var dropTargetId: String? = nil
+    @State private var hiddenTags: [Tag] = []
+    @State private var showHiddenTags = false
+    @State private var tagBullets: [String: [String]] = [:]
+    @State private var tagItems: [String: [Item]] = [:]
 
     var body: some View {
         ScrollView {
@@ -27,6 +31,12 @@ struct TagsView: View {
                         .padding(.vertical, 3)
                         .background(Theme.cardAlt, in: Capsule())
                     Spacer()
+                }
+
+                HStack(spacing: 8) {
+                    howToChip(icon: "number", text: "Click a tag to see its bullets")
+                    howToChip(icon: "arrow.triangle.merge", text: "Drag one tag onto another to merge")
+                    howToChip(icon: "cursorarrow.click", text: "Right-click for Master Doc, rename, delete")
                 }
 
                 if topLevelTags.isEmpty {
@@ -49,6 +59,34 @@ struct TagsView: View {
                         ForEach(topLevelTags) { tag in
                             tagRow(tag)
                         }
+
+                        // Hidden tags section
+                        if !hiddenTags.isEmpty {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) { showHiddenTags.toggle() }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: showHiddenTags ? "chevron.down" : "chevron.right")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(Theme.textMuted)
+                                    Image(systemName: "eye.slash")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Theme.textMuted)
+                                    Text("Hidden (\(hiddenTags.count))")
+                                        .font(.inter(12, weight: .medium))
+                                        .foregroundStyle(Theme.textMuted)
+                                }
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+
+                            if showHiddenTags {
+                                ForEach(hiddenTags) { tag in
+                                    tagRow(tag)
+                                        .opacity(0.55)
+                                }
+                            }
+                        }
                     }
                     .confirmationDialog("Merge Tags", isPresented: $showMergeConfirm) {
                         Button("Merge #\(mergeSource?.name ?? "") → #\(mergeTarget?.name ?? "")") {
@@ -70,27 +108,29 @@ struct TagsView: View {
 
     @ViewBuilder
     private func tagRow(_ tag: Tag) -> some View {
-        let hasChildren = !(subTagsMap[tag.id]?.isEmpty ?? true)
         let isExpanded = expandedTags.contains(tag.id)
         let count = itemCounts[tag.id] ?? 0
+        let bullets = tagBullets[tag.id] ?? []
+        let items = tagItems[tag.id] ?? []
 
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                if hasChildren {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            if isExpanded { expandedTags.remove(tag.id) } else { expandedTags.insert(tag.id) }
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isExpanded {
+                            expandedTags.remove(tag.id)
+                        } else {
+                            expandedTags.insert(tag.id)
+                            loadTagDetail(tag)
                         }
-                    } label: {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(Theme.textMuted)
-                            .frame(width: 16, height: 16)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Color.clear.frame(width: 16, height: 16)
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(width: 16, height: 16)
                 }
+                .buttonStyle(.plain)
 
                 if renamingTagId == tag.id {
                     HStack(spacing: 8) {
@@ -129,6 +169,12 @@ struct TagsView: View {
                             Text("\(count) items")
                                 .font(.inter(10))
                                 .foregroundStyle(Theme.textMuted)
+                            let bulletCount = (tagBullets[tag.id] ?? []).count
+                            if isExpanded && bulletCount > 0 {
+                                Text("· \(bulletCount) bullets")
+                                    .font(.inter(10))
+                                    .foregroundStyle(Theme.textMuted)
+                            }
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 9))
@@ -201,36 +247,101 @@ struct TagsView: View {
                 }
             }
 
-            if isExpanded, let children = subTagsMap[tag.id] {
+            if isExpanded {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(children) { child in
-                        let childCount = itemCounts[child.id] ?? 0
-                        Button {
-                            appState.navigate(to: .tagDetail(child.id))
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "number")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(Theme.accent.opacity(0.7))
-                                Text(child.name)
-                                    .font(.inter(12, weight: .medium))
-                                    .foregroundStyle(Theme.textSecondary)
-                                Text("\(childCount)")
-                                    .font(.inter(9))
-                                    .foregroundStyle(Theme.textMuted)
-                                Spacer()
+                    // Sub-tags
+                    if let children = subTagsMap[tag.id], !children.isEmpty {
+                        ForEach(children) { child in
+                            let childCount = itemCounts[child.id] ?? 0
+                            Button {
+                                appState.navigate(to: .tagDetail(child.id))
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "number")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(Theme.accent.opacity(0.7))
+                                    Text(child.name)
+                                        .font(.inter(12, weight: .medium))
+                                        .foregroundStyle(Theme.textSecondary)
+                                    Text("\(childCount) items")
+                                        .font(.inter(9))
+                                        .foregroundStyle(Theme.textMuted)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Theme.cardAlt, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Theme.cardAlt, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                            .buttonStyle(.plain)
+                            .padding(.leading, 44)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.leading, 44)
+                    }
+
+                    // Items
+                    if !items.isEmpty {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Items").font(.inter(10, weight: .semibold)).foregroundStyle(Theme.textMuted)
+                                .padding(.leading, 44)
+                            ForEach(items) { item in
+                                HStack(spacing: 8) {
+                                    Image(systemName: item.category == .action ? "checkmark.circle" : item.category == .brainstorm ? "lightbulb" : "link")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(item.priority == .high ? Theme.warnColor : Theme.accent.opacity(0.6))
+                                    Text(item.text)
+                                        .font(.inter(12))
+                                        .foregroundStyle(item.done ? Theme.textMuted : Theme.textPrimary)
+                                        .strikethrough(item.done)
+                                        .lineLimit(2)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Theme.cardAlt, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                                .padding(.leading, 44)
+                            }
+                        }
+                    }
+
+                    // Bullets
+                    if !bullets.isEmpty {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Bullets").font(.inter(10, weight: .semibold)).foregroundStyle(Theme.textMuted)
+                                .padding(.leading, 44)
+                            ForEach(bullets, id: \.self) { bullet in
+                                HStack(spacing: 8) {
+                                    Text("•").font(.inter(11)).foregroundStyle(Theme.textMuted)
+                                    Text(bullet)
+                                        .font(.inter(12))
+                                        .foregroundStyle(Theme.textSecondary)
+                                        .lineLimit(2)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Theme.canvas, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                                .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.cardBorder.opacity(0.5), lineWidth: 1))
+                                .padding(.leading, 44)
+                            }
+                        }
                     }
                 }
                 .padding(.top, 4)
             }
         }
+    }
+
+    private func loadTagDetail(_ tag: Tag) {
+        let allDumps = (try? Queries.getAllDumps()) ?? []
+        var bullets: [String] = []
+        for dump in allDumps {
+            for bullet in DumpBullet.parse(from: dump.content) where bullet.tags.contains(tag.name) {
+                let clean = bullet.text.replacingOccurrences(of: #"#[\w\-]+"#, with: "", options: .regularExpression)
+                    .replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
+                if !clean.isEmpty { bullets.append(clean) }
+            }
+        }
+        tagBullets[tag.id] = bullets
+        tagItems[tag.id] = (try? Queries.getItemsForTag(tagId: tag.id, done: nil)) ?? []
     }
 
     private func performMerge() {
@@ -244,8 +355,25 @@ struct TagsView: View {
         withAnimation { appState.openMasterDocPanel(tagId: tag.id) }
     }
 
+    private func howToChip(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            Text(text)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private func reload() {
         let all = (try? Queries.getTopLevelTags()) ?? []
+        let hiddenTexts = (try? Queries.getHiddenBulletTexts()) ?? []
+        let allDumps = (try? Queries.getAllDumps()) ?? []
+
         var subs: [String: [Tag]] = [:]
         var counts: [String: Int] = [:]
         for tag in all {
@@ -255,12 +383,37 @@ struct TagsView: View {
                 counts[child.id] = (try? Queries.getItemCountForTag(tagId: child.id)) ?? 0
             }
         }
-        // Hide tags with 0 items (and no children with items), sort by descending item count
-        topLevelTags = all.filter { tag in
-            let ownCount = counts[tag.id] ?? 0
-            let childCount = (subs[tag.id] ?? []).reduce(0) { $0 + (counts[$1.id] ?? 0) }
-            return ownCount > 0 || childCount > 0
-        }.sorted { (counts[$0.id] ?? 0) > (counts[$1.id] ?? 0) }
+
+        // A tag is "hidden" when it has no active items AND all its dump bullets are hidden
+        func allBulletsHidden(_ tag: Tag) -> Bool {
+            var tagBullets: [String] = []
+            for dump in allDumps {
+                let bullets = DumpBullet.parse(from: dump.content)
+                for bullet in bullets where bullet.tags.contains(tag.name) {
+                    tagBullets.append(bullet.text)
+                }
+            }
+            guard !tagBullets.isEmpty else { return false }
+            return tagBullets.allSatisfy { hiddenTexts.contains($0) }
+        }
+
+        let activeItemCount: (Tag) -> Int = { tag in
+            let own = counts[tag.id] ?? 0
+            let child = (subs[tag.id] ?? []).reduce(0) { $0 + (counts[$1.id] ?? 0) }
+            return own + child
+        }
+
+        let (active, hidden) = all.reduce(into: ([Tag](), [Tag]())) { result, tag in
+            let noActiveItems = activeItemCount(tag) == 0
+            if noActiveItems && allBulletsHidden(tag) {
+                result.1.append(tag)
+            } else if activeItemCount(tag) > 0 {
+                result.0.append(tag)
+            }
+        }
+
+        topLevelTags = active.sorted { (counts[$0.id] ?? 0) > (counts[$1.id] ?? 0) }
+        hiddenTags = hidden.sorted { $0.name < $1.name }
         subTagsMap = subs
         itemCounts = counts
     }

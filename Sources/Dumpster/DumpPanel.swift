@@ -70,6 +70,11 @@ struct DumpPanelContent: View {
                 .background(.white, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
                 .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Color.gray.opacity(0.3), lineWidth: 1))
                 .onSubmit { save() }
+                .onChange(of: text) { _, newValue in
+                    if newValue.hasPrefix("* ") {
+                        text = "• " + String(newValue.dropFirst(2))
+                    }
+                }
         }
         .padding(16)
         .frame(width: 400)

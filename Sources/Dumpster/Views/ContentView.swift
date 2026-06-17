@@ -29,7 +29,14 @@ struct ContentView: View {
                     tagId: tagId,
                     tagDisplayName: (try? Queries.getTag(id: tagId))?.name,
                     mode: .panel,
-                    onClose: { withAnimation { appState.closeMasterDocPanel() } }
+                    siblingTagIds: appState.masterDocSiblingTagIds,
+                    onClose: { withAnimation { appState.closeMasterDocPanel() } },
+                    onSwitchTag: { newTagId in
+                        withAnimation {
+                            let remainingSiblings = ([tagId] + appState.masterDocSiblingTagIds).filter { $0 != newTagId }
+                            appState.openMasterDocPanel(tagId: newTagId, siblingTagIds: remainingSiblings)
+                        }
+                    }
                 )
                 .frame(minWidth: 340, idealWidth: 420, maxWidth: 500)
                 .background(Theme.cardBg)

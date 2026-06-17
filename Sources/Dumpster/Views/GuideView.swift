@@ -240,10 +240,10 @@ struct GuideView: View {
             Text(detail)
                 .font(.inter(11))
                 .foregroundStyle(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(2)
+            Spacer(minLength: 0)
         }
-        .frame(width: 148)
+        .frame(width: 148, height: 170, alignment: .top)
         .padding(14)
         .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
         .overlay(

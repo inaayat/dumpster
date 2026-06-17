@@ -1,6 +1,14 @@
 import SwiftUI
 import AppKit
 
+class DumpEditorHandle: ObservableObject {
+    weak var coordinator: DumpTextEditor.Coordinator?
+
+    func insertCompletion(partial: String, full: String) {
+        coordinator?.insertCompletion(partial: partial, full: full)
+    }
+}
+
 final class GrowingNSTextView: NSTextView {
     override var intrinsicContentSize: NSSize {
         guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
@@ -19,7 +27,10 @@ struct DumpTextEditor: NSViewRepresentable {
     @Binding var text: String
     var fontSize: CGFloat = 13
     var focusOnAppear: Bool = false
+    var handle: DumpEditorHandle? = nil
     var onHeightChange: ((CGFloat) -> Void)? = nil
+    var onPartialTag: ((String?) -> Void)? = nil
+    var onTabPress: (() -> Bool)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -56,6 +67,7 @@ struct DumpTextEditor: NSViewRepresentable {
 
         tv.delegate = context.coordinator
         context.coordinator.textView = tv
+        handle?.coordinator = context.coordinator
         context.coordinator.applyColoring(text)
 
         return tv
@@ -63,6 +75,7 @@ struct DumpTextEditor: NSViewRepresentable {
 
     func updateNSView(_ nsView: GrowingNSTextView, context: Context) {
         let coord = context.coordinator
+        coord.parent = self
         guard !coord.isInternalEdit else { return }
 
         if text != coord.lastText {
@@ -185,7 +198,59 @@ struct DumpTextEditor: NSViewRepresentable {
             }
         }
 
+        // MARK: - Autocomplete
+
+        func insertCompletion(partial: String, full: String) {
+            guard let textView else { return }
+            let text = textView.string
+            let cursorLoc = textView.selectedRange().location
+            guard cursorLoc <= text.utf16.count else { return }
+            let utf16End = text.utf16.index(text.utf16.startIndex, offsetBy: cursorLoc)
+            guard let strEnd = utf16End.samePosition(in: text) else { return }
+            let prefix = String(text[..<strEnd])
+            guard let matchRange = prefix.range(of: "#\(partial)", options: [.backwards, .caseInsensitive]) else { return }
+            let nsRange = NSRange(matchRange, in: prefix)
+            let replacement = "#\(full) "
+
+            isInternalEdit = true
+            textView.textStorage?.replaceCharacters(in: nsRange, with: replacement)
+            let newCursorLoc = nsRange.location + replacement.utf16.count
+            let newText = textView.string
+            lastText = newText
+            parent.text = newText
+
+            let font = NSFont(name: "Inter", size: parent.fontSize) ?? NSFont.systemFont(ofSize: parent.fontSize)
+            let para = NSMutableParagraphStyle()
+            para.lineSpacing = 4
+            let baseAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor, .paragraphStyle: para]
+            let attrStr = NSMutableAttributedString(string: newText, attributes: baseAttrs)
+            colorHashtags(in: attrStr, font: font, paragraphStyle: para)
+            styleDeleteLines(in: attrStr, font: font, paragraphStyle: para)
+            textView.textStorage?.setAttributedString(attrStr)
+            textView.setSelectedRange(NSRange(location: min(newCursorLoc, newText.utf16.count), length: 0))
+            isInternalEdit = false
+
+            parent.onPartialTag?(nil)
+        }
+
+        private func extractPartialTag(_ text: String, cursorAt utf16Loc: Int) -> String? {
+            guard utf16Loc > 0, utf16Loc <= text.utf16.count else { return nil }
+            let utf16End = text.utf16.index(text.utf16.startIndex, offsetBy: utf16Loc)
+            guard let strEnd = utf16End.samePosition(in: text) else { return nil }
+            let prefix = String(text[..<strEnd])
+            guard let matchRange = prefix.range(of: #"#([\w\-]+)$"#, options: .regularExpression) else { return nil }
+            let partial = String(prefix[matchRange].dropFirst())
+            return partial.isEmpty ? nil : partial
+        }
+
         // MARK: - NSTextViewDelegate
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                if parent.onTabPress?() == true { return true }
+            }
+            return false
+        }
 
         func textDidBeginEditing(_ notification: Notification) {
             guard let textView, textView.string.isEmpty else { return }
@@ -225,6 +290,9 @@ struct DumpTextEditor: NSViewRepresentable {
 
             isInternalEdit = false
             emitHeight()
+
+            let partial = extractPartialTag(newText, cursorAt: selectedRange.location)
+            parent.onPartialTag?(partial)
         }
     }
 }

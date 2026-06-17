@@ -30,6 +30,14 @@ struct WinsView: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
 
+            HStack(spacing: 16) {
+                howToChip(icon: "number", text: "Add #win to any bullet in your Daily Dump")
+                howToChip(icon: "plus.circle", text: "Or tap \"Log Win\" to add one directly")
+                howToChip(icon: "trash", text: "Right-click a win to delete it")
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 14)
+
             if showAddWin {
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("What did you achieve?", text: $newWinText)
@@ -97,6 +105,14 @@ struct WinsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.cardBorder, lineWidth: 1))
+        .contextMenu {
+            Button(role: .destructive) {
+                try? Queries.deleteWin(id: win.id)
+                loadWins()
+            } label: {
+                Label("Delete Win", systemImage: "trash")
+            }
+        }
     }
 
     private func saveWin() {
@@ -113,5 +129,19 @@ struct WinsView: View {
     private func loadWins() {
         let allWins = (try? Queries.getAllWins()) ?? []
         wins = allWins.map { win in (win, win.itemId.flatMap { try? Queries.getItem(id: $0) }) }
+    }
+
+    private func howToChip(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.warnColor)
+            Text(text)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.warnColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -410,6 +410,27 @@ struct Queries {
         try db.read { db in try Win.fetchCount(db) }
     }
 
+    // MARK: - Hidden Bullets
+
+    static func hideBullet(text: String) throws {
+        try db.write { db in
+            guard try HiddenBullet.filter(HiddenBullet.Columns.bulletText == text).fetchCount(db) == 0 else { return }
+            try HiddenBullet.new(text: text).insert(db)
+        }
+    }
+
+    static func unhideBullet(text: String) throws {
+        try db.write { db in
+            _ = try HiddenBullet.filter(HiddenBullet.Columns.bulletText == text).deleteAll(db)
+        }
+    }
+
+    static func getHiddenBulletTexts() throws -> Set<String> {
+        try db.read { db in
+            Set(try HiddenBullet.fetchAll(db).map { $0.bulletText })
+        }
+    }
+
     // MARK: - Item Links
 
     static func addLink(_ link: ItemLink) throws {

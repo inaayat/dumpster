@@ -5,11 +5,13 @@ struct MasterDocCore: View {
     var tagDisplayName: String? = nil
     var mode: Mode = .panel
     var showSubTagSettings: Bool = false
+    var siblingTagIds: [String] = []
     var onClose: (() -> Void)? = nil
     var onBack: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onDocUpdated: (() -> Void)? = nil
     var onItemIncorporated: ((String) -> Void)? = nil
+    var onSwitchTag: ((String) -> Void)? = nil
 
     enum Mode { case panel, page }
 
@@ -115,6 +117,24 @@ struct MasterDocCore: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Theme.cardAlt, in: Capsule())
+                    }
+                    if !siblingTagIds.isEmpty {
+                        ForEach(siblingTagIds, id: \.self) { siblingId in
+                            if let siblingName = (try? Queries.getTag(id: siblingId))?.name {
+                                Button {
+                                    onSwitchTag?(siblingId)
+                                } label: {
+                                    Text("#\(siblingName)")
+                                        .font(.inter(9, weight: .medium))
+                                        .foregroundStyle(Theme.accent.opacity(0.8))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(Theme.accent.opacity(0.1), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .help("Open Master Doc for #\(siblingName)")
+                            }
+                        }
                     }
                 }
             }

@@ -20,6 +20,12 @@ struct DocsListView: View {
                     Spacer()
                 }
 
+                HStack(spacing: 8) {
+                    howToChip(icon: "cursorarrow.click", text: "Right-click any tag → Open Master Doc")
+                    howToChip(icon: "arrow.down.doc", text: "Drag bullets in — AI places them")
+                    howToChip(icon: "wand.and.stars", text: "Synthesize rebuilds from all tagged bullets")
+                }
+
                 if docs.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "doc.text")
@@ -83,6 +89,20 @@ struct DocsListView: View {
             .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.cardBorder, lineWidth: 1))
         }
         .buttonStyle(.plain)
+    }
+
+    private func howToChip(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            Text(text)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func reload() {

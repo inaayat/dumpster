@@ -20,6 +20,7 @@ final class AppState {
     }
     var detailPanelItemId: String?
     var masterDocPanelTagId: String?
+    var masterDocSiblingTagIds: [String] = []
     var showEditSheet = false
     var editingItem: Item?
     var searchQuery = ""
@@ -44,13 +45,14 @@ final class AppState {
         detailPanelItemId = nil
     }
 
-    func openMasterDocPanel(tagId: String) {
+    func openMasterDocPanel(tagId: String, siblingTagIds: [String] = []) {
         if (try? Queries.getMasterDoc(tagId: tagId)) == nil {
             let tag = try? Queries.getTag(id: tagId)
             let title = (tag?.name ?? "Untitled").replacingOccurrences(of: "-", with: " ").capitalized
             try? Queries.upsertMasterDoc(tagId: tagId, content: "", title: title)
         }
         masterDocPanelTagId = tagId
+        masterDocSiblingTagIds = siblingTagIds.filter { $0 != tagId }
     }
 
     func closeMasterDocPanel() {

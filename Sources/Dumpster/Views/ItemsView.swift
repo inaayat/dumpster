@@ -85,6 +85,15 @@ struct ItemsView: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 12)
 
+            // How to use hints
+            HStack(spacing: 8) {
+                howToChip(icon: "line.3.horizontal.decrease.circle", text: "Filter by Actions, Brainstorms, Resources")
+                howToChip(icon: "tag", text: "\"By tag\" groups items by topic")
+                howToChip(icon: "cursorarrow.click", text: "Right-click any item for options")
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 8)
+
             // Search
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
@@ -115,7 +124,7 @@ struct ItemsView: View {
             }
         }
         .background(Theme.canvas)
-        .onAppear { reload(); resetTagOrder() }
+        .onAppear { reload(); if stableTagOrder.isEmpty { resetTagOrder() } }
         .onChange(of: appState.showEditSheet) { _, showing in
             if !showing { reload() }
         }
@@ -459,5 +468,19 @@ struct ItemsView: View {
         itemTags = tagMap
 
         counts = (try? Queries.getCategoryCounts()) ?? [:]
+    }
+
+    private func howToChip(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            Text(text)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }

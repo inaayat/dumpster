@@ -24,6 +24,12 @@ struct DumpView: View {
     @State private var docRefreshToken = 0
     @State private var editingBulletId: UUID? = nil
     @State private var editedBulletText = ""
+    @State private var hiddenBulletTexts: Set<String> = []
+    @State private var showHiddenBullets = false
+    @StateObject private var dumpEditorHandle = DumpEditorHandle()
+    @State private var partialTag: String? = nil
+    @State private var tagSuggestions: [String] = []
+    @State private var showTagBar = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -31,8 +37,11 @@ struct DumpView: View {
                 VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     attentionBar
                     header
+                    dumpHints
                     magicTagsGuide
-                    tagBar
+                    if showTagBar || searchTag != nil {
+                        tagBar
+                    }
                     if searchTag != nil {
                         tagSearchSection
                             .id(docRefreshToken)
@@ -123,6 +132,19 @@ struct DumpView: View {
             }
             Spacer()
 
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { showTagBar.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "number").font(.system(size: 10, weight: .bold))
+                    Text("Filter").font(.inter(11, weight: .medium))
+                }
+                .foregroundStyle(showTagBar ? Theme.accent : Theme.textMuted)
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background((showTagBar ? Theme.accent.opacity(0.12) : Theme.cardAlt), in: Capsule())
+            }
+            .buttonStyle(.plain)
+
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
                     analyze()
@@ -143,6 +165,33 @@ struct DumpView: View {
                 .disabled(isAnalyzing)
             }
         }
+    }
+
+    // MARK: - Hints
+
+    private var dumpHints: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                dumpHintChip(icon: "list.bullet", text: "Type * or • to start a bullet")
+                dumpHintChip(icon: "tag", text: "#tags auto-categorize bullets")
+                dumpHintChip(icon: "doc.text", text: "#save appends bullet to open Master Doc")
+                dumpHintChip(icon: "sparkles", text: "Analyze with AI to extract action items")
+            }
+        }
+    }
+
+    private func dumpHintChip(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            Text(text)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: - Magic Tags Guide
@@ -197,7 +246,9 @@ struct DumpView: View {
 
     private var tagBar: some View {
         let allTags = collectAllTags()
-        let filteredTags = tagFilter.isEmpty ? allTags : allTags.filter { $0.localizedCaseInsensitiveContains(tagFilter) }
+        let filteredTags = tagFilter.isEmpty
+            ? Array(allTags.prefix(8))
+            : allTags.filter { $0.localizedCaseInsensitiveContains(tagFilter) }
         return Group {
             if !allTags.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -247,6 +298,16 @@ struct DumpView: View {
                                     showTagDropAction = true
                                     return true
                                 } isTargeted: { _ in }
+                            }
+
+                            if tagFilter.isEmpty && allTags.count > 8 {
+                                Text("+\(allTags.count - 8) more")
+                                    .font(.inter(10))
+                                    .foregroundStyle(Theme.textMuted)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Theme.cardAlt, in: Capsule())
+                                    .help("Use the filter above to find other tags")
                             }
 
                             if searchTag != nil {
@@ -315,9 +376,43 @@ struct DumpView: View {
                     .foregroundStyle(Theme.textMuted)
             }
 
+            if !tagSuggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(tagSuggestions, id: \.self) { tag in
+                            Button {
+                                dumpEditorHandle.insertCompletion(partial: partialTag ?? "", full: tag)
+                                partialTag = nil
+                                tagSuggestions = []
+                            } label: {
+                                Text("#\(tag)")
+                                    .font(.inter(11, weight: .semibold))
+                                    .foregroundStyle(Theme.accent)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(Theme.accent.opacity(0.1), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
             ZStack(alignment: .topLeading) {
                 DumpTextEditor(text: $content, fontSize: 13, focusOnAppear: true,
-                               onHeightChange: { h in editorHeight = max(300, h) })
+                               handle: dumpEditorHandle,
+                               onHeightChange: { h in editorHeight = max(300, h) },
+                               onPartialTag: { partial in
+                                   partialTag = partial
+                                   updateTagSuggestions(partial: partial)
+                               },
+                               onTabPress: {
+                                   guard let partial = partialTag, let first = tagSuggestions.first else { return false }
+                                   dumpEditorHandle.insertCompletion(partial: partial, full: first)
+                                   partialTag = nil
+                                   tagSuggestions = []
+                                   return true
+                               })
                     .frame(height: editorHeight)
                     .padding(12)
                     .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
@@ -480,12 +575,15 @@ struct DumpView: View {
         if let tag = searchTag {
             let docContent = getMasterDocContent(for: tag)
             let results = findBulletsByTag(tag)
+            let visible = results.filter { !hiddenBulletTexts.contains($0.bulletText) }
+            let hidden = results.filter { hiddenBulletTexts.contains($0.bulletText) }
+
             VStack(alignment: .leading, spacing: 12) {
                 // Header
                 HStack {
                     Image(systemName: "number").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.accent)
                     Text(tag).font(.inter(16, weight: .bold)).foregroundStyle(Theme.textPrimary)
-                    Text("\(results.count) bullets").font(.inter(11)).foregroundStyle(Theme.textMuted)
+                    Text("\(visible.count) bullets").font(.inter(11)).foregroundStyle(Theme.textMuted)
                     Spacer()
 
                     // Master Doc button
@@ -503,11 +601,8 @@ struct DumpView: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Send selected to doc
                     if !selectedBulletIds.isEmpty && showMasterDocPanel {
-                        Button {
-                            sendSelectedToDoc(tag: tag)
-                        } label: {
+                        Button { sendSelectedToDoc(tag: tag) } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "arrow.right.doc").font(.system(size: 9))
                                 Text("Send \(selectedBulletIds.count) to doc").font(.inter(9, weight: .semibold))
@@ -521,8 +616,8 @@ struct DumpView: View {
                     }
                 }
 
-                // Bullets sorted: not-in-doc first
-                let sorted = results.sorted { a, b in
+                // Visible bullets — not-in-doc first
+                let sorted = visible.sorted { a, b in
                     let aInDoc = bulletIsInDoc(a.bulletText, docContent: docContent)
                     let bInDoc = bulletIsInDoc(b.bulletText, docContent: docContent)
                     if aInDoc != bInDoc { return !aInDoc }
@@ -530,90 +625,145 @@ struct DumpView: View {
                 }
 
                 ForEach(sorted, id: \.id) { result in
-                    let isInDoc = bulletIsInDoc(result.bulletText, docContent: docContent)
-                    let isSelected = selectedBulletIds.contains(result.id)
-
-                    HStack(spacing: 8) {
-                        // Checkbox / in-doc indicator
-                        if isInDoc {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.successColor.opacity(0.6))
-                        } else {
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 14))
-                                .foregroundStyle(isSelected ? Theme.accent : Theme.textMuted.opacity(0.3))
-                                .onTapGesture {
-                                    if isSelected { selectedBulletIds.remove(result.id) }
-                                    else { selectedBulletIds.insert(result.id) }
-                                }
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Text(result.dateDisplay).font(.inter(10, weight: .medium)).foregroundStyle(Theme.textMuted)
-                                if isInDoc {
-                                    Text("in doc")
-                                        .font(.inter(8, weight: .bold))
-                                        .foregroundStyle(Theme.successColor)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1)
-                                        .background(Theme.successColor.opacity(0.1), in: Capsule())
-                                }
-                            }
-                            if editingBulletId == result.id {
-                                TextField("", text: $editedBulletText)
-                                    .font(.inter(13))
-                                    .textFieldStyle(.plain)
-                                    .onSubmit { commitBulletEdit(result: result) }
-                                    .onExitCommand { editingBulletId = nil }
-                            } else {
-                                Text(stripTags(result.bulletText))
-                                    .font(.inter(13))
-                                    .foregroundStyle(isInDoc ? Theme.textMuted : Theme.textPrimary)
-                                    .textSelection(.enabled)
-                                    .onTapGesture(count: 2) {
-                                        editingBulletId = result.id
-                                        editedBulletText = result.bulletText
-                                    }
-                            }
-                        }
-                        Spacer()
-
-                        // Add to doc button (only if not in doc and panel is open)
-                        if !isInDoc && showMasterDocPanel {
-                            Button {
-                                appendBulletToMasterDoc(text: result.bulletText, tag: tag)
-                            } label: {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(Theme.accent)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Append as bullet (drag into doc for AI sort)")
-                        }
-                    }
-                    .padding(10)
-                    .background(
-                        isInDoc ? Theme.successColor.opacity(0.04) : (isSelected ? Theme.accent.opacity(0.06) : Theme.cardBg),
-                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius)
-                    )
-                    .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(
-                        isInDoc ? Theme.successColor.opacity(0.2) : (isSelected ? Theme.accent.opacity(0.5) : Theme.border), lineWidth: 1
-                    ))
-                    .draggable(result.bulletText) {
-                        Text(result.bulletText)
-                            .font(.inter(11))
-                            .foregroundStyle(Theme.textPrimary)
-                            .lineLimit(2)
-                            .padding(8)
-                            .frame(maxWidth: 280, alignment: .leading)
-                            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: 6))
-                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                    }
+                    bulletRow(result: result, docContent: docContent, tag: tag, isHiddenRow: false)
                 }
 
+                // Hidden bullets section
+                if !hidden.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { showHiddenBullets.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: showHiddenBullets ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(Theme.textMuted)
+                            Image(systemName: "eye.slash")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Theme.textMuted)
+                            Text("Hidden (\(hidden.count))")
+                                .font(.inter(11, weight: .medium))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+
+                    if showHiddenBullets {
+                        ForEach(hidden, id: \.id) { result in
+                            bulletRow(result: result, docContent: docContent, tag: tag, isHiddenRow: true)
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func bulletRow(result: TagSearchResult, docContent: String, tag: String, isHiddenRow: Bool) -> some View {
+        let isInDoc = bulletIsInDoc(result.bulletText, docContent: docContent)
+        let isSelected = selectedBulletIds.contains(result.id)
+
+        HStack(spacing: 8) {
+            if isInDoc {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.successColor.opacity(0.6))
+            } else if !isHiddenRow {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(isSelected ? Theme.accent : Theme.textMuted.opacity(0.3))
+                    .onTapGesture {
+                        if isSelected { selectedBulletIds.remove(result.id) }
+                        else { selectedBulletIds.insert(result.id) }
+                    }
+            } else {
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textMuted.opacity(0.4))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(result.dateDisplay).font(.inter(10, weight: .medium)).foregroundStyle(Theme.textMuted)
+                    if isInDoc {
+                        Text("in doc")
+                            .font(.inter(8, weight: .bold))
+                            .foregroundStyle(Theme.successColor)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Theme.successColor.opacity(0.1), in: Capsule())
+                    }
+                }
+                if editingBulletId == result.id {
+                    TextField("", text: $editedBulletText)
+                        .font(.inter(13))
+                        .textFieldStyle(.plain)
+                        .onSubmit { commitBulletEdit(result: result) }
+                        .onExitCommand { editingBulletId = nil }
+                } else {
+                    Text(stripTags(result.bulletText))
+                        .font(.inter(13))
+                        .foregroundStyle(isHiddenRow ? Theme.textMuted.opacity(0.5) : (isInDoc ? Theme.textMuted : Theme.textPrimary))
+                        .textSelection(.enabled)
+                        .onTapGesture(count: 2) {
+                            guard !isHiddenRow else { return }
+                            editingBulletId = result.id
+                            editedBulletText = result.bulletText
+                        }
+                }
+            }
+            Spacer()
+
+            if isHiddenRow {
+                Button {
+                    try? Queries.unhideBullet(text: result.bulletText)
+                    loadHiddenBullets()
+                } label: {
+                    Image(systemName: "eye")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .help("Unhide this bullet")
+            } else {
+                if !isInDoc && showMasterDocPanel {
+                    Button { appendBulletToMasterDoc(text: result.bulletText, tag: tag) } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Append as bullet (drag into doc for AI sort)")
+                }
+                Button {
+                    try? Queries.hideBullet(text: result.bulletText)
+                    loadHiddenBullets()
+                } label: {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textMuted.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .help("Hide this bullet")
+            }
+        }
+        .padding(10)
+        .background(
+            isHiddenRow ? Theme.cardAlt.opacity(0.5) : (isInDoc ? Theme.successColor.opacity(0.04) : (isSelected ? Theme.accent.opacity(0.06) : Theme.cardBg)),
+            in: RoundedRectangle(cornerRadius: Theme.cornerRadius)
+        )
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(
+            isHiddenRow ? Theme.border.opacity(0.5) : (isInDoc ? Theme.successColor.opacity(0.2) : (isSelected ? Theme.accent.opacity(0.5) : Theme.border)),
+            lineWidth: 1
+        ))
+        .draggable(result.bulletText) {
+            Text(result.bulletText)
+                .font(.inter(11))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(2)
+                .padding(8)
+                .frame(maxWidth: 280, alignment: .leading)
+                .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: 6))
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
         }
     }
 
@@ -688,6 +838,15 @@ struct DumpView: View {
     private func processMagicTags(line: String) {
         MagicTagProcessor.processLine(line)
         appState.refreshCounts()
+
+        // #save → open the master doc for the first non-magic tag on this bullet
+        if let bullet = DumpBullet.parse(from: line).first,
+           bullet.magicTags.contains(.save),
+           let firstTagName = bullet.tags.first,
+           let primaryTag = try? Queries.getOrCreateTag(name: firstTagName) {
+            let siblingIds = bullet.tags.dropFirst().compactMap { (try? Queries.getOrCreateTag(name: $0))?.id }
+            withAnimation { appState.openMasterDocPanel(tagId: primaryTag.id, siblingTagIds: siblingIds) }
+        }
     }
 
     private func openMasterDoc(tagName: String) {
@@ -739,12 +898,14 @@ struct DumpView: View {
     private func collectAllTags() -> [String] {
         var allDumps = pastDumps
         if let today = todayDump { allDumps.insert(today, at: 0) }
-        var tagSet = Set<String>()
+        var counts: [String: Int] = [:]
         for dump in allDumps {
             let bullets = DumpBullet.parse(from: dump.content)
-            for bullet in bullets { tagSet.formUnion(bullet.tags) }
+            for bullet in bullets {
+                for tag in bullet.tags { counts[tag, default: 0] += 1 }
+            }
         }
-        return tagSet.sorted()
+        return counts.keys.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
     }
 
     private func findBulletsByTag(_ tag: String) -> [TagSearchResult] {
@@ -935,7 +1096,19 @@ struct DumpView: View {
         }.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
+    private func updateTagSuggestions(partial: String?) {
+        guard let partial, !partial.isEmpty else { tagSuggestions = []; return }
+        let allTagNames = ((try? Queries.getAllTags()) ?? []).map(\.name)
+        let lower = partial.lowercased()
+        tagSuggestions = Array(allTagNames.filter { $0.hasPrefix(lower) && $0 != lower }.prefix(6))
+    }
+
+    private func loadHiddenBullets() {
+        hiddenBulletTexts = (try? Queries.getHiddenBulletTexts()) ?? []
+    }
+
     private func reload() {
+        loadHiddenBullets()
         todayDump = try? Queries.getOrCreateTodayDump()
         let raw = todayDump?.content ?? ""
         let normalized = stripAcknowledged(raw)
