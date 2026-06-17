@@ -29,10 +29,12 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 - Magic tags fire on **Enter** — all tags on the line are read before creating items, so `#action #prio` always produces a high-priority item
 - Magic tags render in color inline as you type (green, orange, teal, gold, grey)
 - `#delete` tag deletes matching items (line shows struck-through red italic)
+- `#save` appends bullet to the tagged Master Doc **and** auto-opens that doc's panel; sibling tags on the same bullet appear as pill switchers in the panel header
 - Processed bullets marked `[acknowledged]` to prevent duplicates
 - Adding a `#tag` to any bullet at any time registers it immediately
+- **Tag autocomplete**: start typing `#partial` and a suggestion strip appears above the editor — Tab accepts the first suggestion, click any pill to insert
 - Attention bar showing ALL high-priority + overdue items (always expanded)
-- Tag pills bar with search, merge, sub-tag creation, and inline rename (double-click)
+- Tag pills bar (toggle with `# Filter`) with search, merge, sub-tag creation, and inline rename (double-click)
 - Drag any tag pill onto another to merge them — updates everywhere
 - "Analyze with AI" for batch extraction of items
 - Past days expandable with per-day AI analysis
@@ -53,13 +55,14 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 
 ### Tags
 - Primary organizational unit (replaces clusters)
-- Hierarchical: parent tags with expandable sub-tags
+- Hierarchical: parent tags with sub-tags always visible below them
 - Created automatically from `#hashtags` in your dumps
 - Double-click to rename — updates everywhere (dumps, docs, items, relationships)
 - Rename to an existing tag → they merge automatically
 - Right-click any tag anywhere in the app → **Open Master Doc** (slides in a panel from the right)
 - Right-click → **Delete Tag** to remove it
-- Drag tags onto each other to merge or create parent-child relationships
+- Drag tags onto each other → choose **Make sub-tag** or **Merge** from the dialog
+- Click the expand chevron → see inline bullets and items for that tag without leaving the view
 - Click a tag → see its items + Master Doc side-by-side
 - Dragging shows a visual preview of the item or tag being moved
 
@@ -67,8 +70,8 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 - Per-topic persistent documents tied to tags
 - Header shows the parent tag + all sub-tags at a glance
 - **Rich text editor** with full keyboard support:
-  - `Cmd+B` / `Cmd+I` / `Cmd+U` → bold / italic / underline
-  - `Cmd+Shift+X` → strikethrough
+  - `Cmd+B` / `Cmd+I` / `Cmd+U` → bold / italic / underline (works on selection OR toggles typing mode for next input)
+  - `Cmd+Shift+X` → strikethrough (same)
   - `Tab` / `Shift-Tab` → indent / outdent bullets
   - `Enter` continues the current list type (bullet, numbered, checklist)
 - Formatting toolbar: Bold, Italic, Underline, Strikethrough, Bullet, Numbered list, Checklist, Heading menu (H1/H2/H3), font size
@@ -104,7 +107,18 @@ A native macOS app for dumping your thoughts and turning them into organized wor
 
 ## Install
 
+### One-liner
+
 ```bash
+curl -fsSL https://raw.githubusercontent.com/inaayat/dumpster/main/install.sh | bash
+```
+
+This clones the repo, builds a release binary, installs to `/Applications/Dumpster.app`, and opens the app.
+
+### Manual
+
+```bash
+git clone https://github.com/inaayat/dumpster.git ~/dumpster
 cd ~/dumpster
 swift build -c release
 ```
@@ -118,6 +132,7 @@ cp -R .build/release/Dumpster_Dumpster.bundle "$APP/Contents/Resources/"
 cp Sources/Dumpster/Resources/AppIcon.icns "$APP/Contents/Resources/"
 codesign --force --sign - "$APP/Contents/MacOS/Dumpster"
 codesign --force --sign - "$APP"
+open "$APP"
 ```
 
 ### Requirements

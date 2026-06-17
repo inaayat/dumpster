@@ -743,116 +743,168 @@ class RichMarkdownEditorCoordinator: NSObject, NSTextViewDelegate {
     func toggleBold() {
         guard let textView else { return }
         let range = textView.selectedRange()
-        guard range.length > 0 else { return }
-
-        isInternalEdit = true
-        let md = attributedToMarkdown(textView.attributedString())
-        var lines = md.components(separatedBy: "\n")
-
-        let selectedText = (textView.textStorage!.string as NSString).substring(with: range)
-        let beforeSelection = (textView.textStorage!.string as NSString).substring(to: range.location)
-        let lineIndex = beforeSelection.components(separatedBy: "\n").count - 1
-
-        if lineIndex < lines.count {
-            let line = lines[lineIndex]
-            if line.contains("**\(selectedText)**") {
-                lines[lineIndex] = line.replacingOccurrences(of: "**\(selectedText)**", with: selectedText)
-            } else if let textRange = line.range(of: selectedText) {
-                lines[lineIndex] = line.replacingCharacters(in: textRange, with: "**\(selectedText)**")
+        guard range.length > 0 else {
+            var attrs = textView.typingAttributes
+            let active = (attrs[.markdownInlineBold] as? Bool) == true
+            if active {
+                attrs.removeValue(forKey: .markdownInlineBold)
+                if let f = attrs[.font] as? NSFont {
+                    attrs[.font] = NSFontManager.shared.convert(f, toNotHaveTrait: .boldFontMask)
+                }
+            } else {
+                attrs[.markdownInlineBold] = true
+                if let f = attrs[.font] as? NSFont {
+                    attrs[.font] = NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask)
+                }
             }
+            textView.typingAttributes = attrs
+            return
         }
 
-        let newMd = lines.joined(separator: "\n")
+        isInternalEdit = true
+        let storage = textView.textStorage!
+        var allBold = true
+        storage.enumerateAttribute(.markdownInlineBold, in: range) { v, _, _ in
+            if (v as? Bool) != true { allBold = false }
+        }
+        if allBold {
+            storage.removeAttribute(.markdownInlineBold, range: range)
+            storage.enumerateAttribute(.font, in: range) { v, r, _ in
+                if let f = v as? NSFont {
+                    storage.addAttribute(.font, value: NSFontManager.shared.convert(f, toNotHaveTrait: .boldFontMask), range: r)
+                }
+            }
+        } else {
+            storage.addAttribute(.markdownInlineBold, value: true, range: range)
+            storage.enumerateAttribute(.font, in: range) { v, r, _ in
+                if let f = v as? NSFont {
+                    storage.addAttribute(.font, value: NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask), range: r)
+                }
+            }
+        }
+        let newMd = attributedToMarkdown(textView.attributedString())
         lastMarkdown = newMd
         markdown.wrappedValue = newMd
-        loadMarkdown(newMd)
         isInternalEdit = false
     }
 
     func toggleItalic() {
         guard let textView else { return }
         let range = textView.selectedRange()
-        guard range.length > 0 else { return }
-
-        isInternalEdit = true
-        let md = attributedToMarkdown(textView.attributedString())
-        var lines = md.components(separatedBy: "\n")
-
-        let selectedText = (textView.textStorage!.string as NSString).substring(with: range)
-        let beforeSelection = (textView.textStorage!.string as NSString).substring(to: range.location)
-        let lineIndex = beforeSelection.components(separatedBy: "\n").count - 1
-
-        if lineIndex < lines.count {
-            let line = lines[lineIndex]
-            if line.contains("*\(selectedText)*") && !line.contains("**\(selectedText)**") {
-                lines[lineIndex] = line.replacingOccurrences(of: "*\(selectedText)*", with: selectedText)
-            } else if let textRange = line.range(of: selectedText) {
-                lines[lineIndex] = line.replacingCharacters(in: textRange, with: "*\(selectedText)*")
+        guard range.length > 0 else {
+            var attrs = textView.typingAttributes
+            let active = (attrs[.markdownInlineItalic] as? Bool) == true
+            if active {
+                attrs.removeValue(forKey: .markdownInlineItalic)
+                if let f = attrs[.font] as? NSFont {
+                    attrs[.font] = NSFontManager.shared.convert(f, toNotHaveTrait: .italicFontMask)
+                }
+            } else {
+                attrs[.markdownInlineItalic] = true
+                if let f = attrs[.font] as? NSFont {
+                    attrs[.font] = NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask)
+                }
             }
+            textView.typingAttributes = attrs
+            return
         }
 
-        let newMd = lines.joined(separator: "\n")
+        isInternalEdit = true
+        let storage = textView.textStorage!
+        var allItalic = true
+        storage.enumerateAttribute(.markdownInlineItalic, in: range) { v, _, _ in
+            if (v as? Bool) != true { allItalic = false }
+        }
+        if allItalic {
+            storage.removeAttribute(.markdownInlineItalic, range: range)
+            storage.enumerateAttribute(.font, in: range) { v, r, _ in
+                if let f = v as? NSFont {
+                    storage.addAttribute(.font, value: NSFontManager.shared.convert(f, toNotHaveTrait: .italicFontMask), range: r)
+                }
+            }
+        } else {
+            storage.addAttribute(.markdownInlineItalic, value: true, range: range)
+            storage.enumerateAttribute(.font, in: range) { v, r, _ in
+                if let f = v as? NSFont {
+                    storage.addAttribute(.font, value: NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask), range: r)
+                }
+            }
+        }
+        let newMd = attributedToMarkdown(textView.attributedString())
         lastMarkdown = newMd
         markdown.wrappedValue = newMd
-        loadMarkdown(newMd)
         isInternalEdit = false
     }
 
     func toggleUnderline() {
         guard let textView else { return }
         let range = textView.selectedRange()
-        guard range.length > 0 else { return }
-
-        isInternalEdit = true
-        let md = attributedToMarkdown(textView.attributedString())
-        var lines = md.components(separatedBy: "\n")
-
-        let selectedText = (textView.textStorage!.string as NSString).substring(with: range)
-        let beforeSelection = (textView.textStorage!.string as NSString).substring(to: range.location)
-        let lineIndex = beforeSelection.components(separatedBy: "\n").count - 1
-
-        if lineIndex < lines.count {
-            let line = lines[lineIndex]
-            if line.contains("__\(selectedText)__") {
-                lines[lineIndex] = line.replacingOccurrences(of: "__\(selectedText)__", with: selectedText)
-            } else if let textRange = line.range(of: selectedText) {
-                lines[lineIndex] = line.replacingCharacters(in: textRange, with: "__\(selectedText)__")
+        guard range.length > 0 else {
+            var attrs = textView.typingAttributes
+            let active = (attrs[.markdownInlineUnderline] as? Bool) == true
+            if active {
+                attrs.removeValue(forKey: .markdownInlineUnderline)
+                attrs.removeValue(forKey: .underlineStyle)
+            } else {
+                attrs[.markdownInlineUnderline] = true
+                attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
             }
+            textView.typingAttributes = attrs
+            return
         }
 
-        let newMd = lines.joined(separator: "\n")
+        isInternalEdit = true
+        let storage = textView.textStorage!
+        var allUnderline = true
+        storage.enumerateAttribute(.markdownInlineUnderline, in: range) { v, _, _ in
+            if (v as? Bool) != true { allUnderline = false }
+        }
+        if allUnderline {
+            storage.removeAttribute(.markdownInlineUnderline, range: range)
+            storage.removeAttribute(.underlineStyle, range: range)
+        } else {
+            storage.addAttribute(.markdownInlineUnderline, value: true, range: range)
+            storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+        }
+        let newMd = attributedToMarkdown(textView.attributedString())
         lastMarkdown = newMd
         markdown.wrappedValue = newMd
-        loadMarkdown(newMd)
         isInternalEdit = false
     }
 
     func toggleStrikethrough() {
         guard let textView else { return }
         let range = textView.selectedRange()
-        guard range.length > 0 else { return }
-
-        isInternalEdit = true
-        let md = attributedToMarkdown(textView.attributedString())
-        var lines = md.components(separatedBy: "\n")
-
-        let selectedText = (textView.textStorage!.string as NSString).substring(with: range)
-        let beforeSelection = (textView.textStorage!.string as NSString).substring(to: range.location)
-        let lineIndex = beforeSelection.components(separatedBy: "\n").count - 1
-
-        if lineIndex < lines.count {
-            let line = lines[lineIndex]
-            if line.contains("~~\(selectedText)~~") {
-                lines[lineIndex] = line.replacingOccurrences(of: "~~\(selectedText)~~", with: selectedText)
-            } else if let textRange = line.range(of: selectedText) {
-                lines[lineIndex] = line.replacingCharacters(in: textRange, with: "~~\(selectedText)~~")
+        guard range.length > 0 else {
+            var attrs = textView.typingAttributes
+            let active = (attrs[.markdownInlineStrikethrough] as? Bool) == true
+            if active {
+                attrs.removeValue(forKey: .markdownInlineStrikethrough)
+                attrs.removeValue(forKey: .strikethroughStyle)
+            } else {
+                attrs[.markdownInlineStrikethrough] = true
+                attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
             }
+            textView.typingAttributes = attrs
+            return
         }
 
-        let newMd = lines.joined(separator: "\n")
+        isInternalEdit = true
+        let storage = textView.textStorage!
+        var allStrikethrough = true
+        storage.enumerateAttribute(.markdownInlineStrikethrough, in: range) { v, _, _ in
+            if (v as? Bool) != true { allStrikethrough = false }
+        }
+        if allStrikethrough {
+            storage.removeAttribute(.markdownInlineStrikethrough, range: range)
+            storage.removeAttribute(.strikethroughStyle, range: range)
+        } else {
+            storage.addAttribute(.markdownInlineStrikethrough, value: true, range: range)
+            storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+        }
+        let newMd = attributedToMarkdown(textView.attributedString())
         lastMarkdown = newMd
         markdown.wrappedValue = newMd
-        loadMarkdown(newMd)
         isInternalEdit = false
     }
 

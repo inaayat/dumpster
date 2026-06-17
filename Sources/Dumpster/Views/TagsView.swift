@@ -88,14 +88,17 @@ struct TagsView: View {
                             }
                         }
                     }
-                    .confirmationDialog("Merge Tags", isPresented: $showMergeConfirm) {
-                        Button("Merge #\(mergeSource?.name ?? "") → #\(mergeTarget?.name ?? "")") {
+                    .confirmationDialog("Organize Tags", isPresented: $showMergeConfirm) {
+                        Button("Make #\(mergeSource?.name ?? "") a sub-tag of #\(mergeTarget?.name ?? "")") {
+                            performMakeSubTag()
+                        }
+                        Button("Merge #\(mergeSource?.name ?? "") into #\(mergeTarget?.name ?? "")") {
                             performMerge()
                         }
                         Button("Cancel", role: .cancel) { mergeSource = nil; mergeTarget = nil }
                     } message: {
                         if let src = mergeSource, let tgt = mergeTarget {
-                            Text("Rename #\(src.name) to #\(tgt.name) everywhere — items, dumps, and tags. Cannot be undone.")
+                            Text("Drop #\(src.name) onto #\(tgt.name): make it a sub-tag, or merge (rename everywhere — cannot be undone).")
                         }
                     }
                 }
@@ -247,36 +250,39 @@ struct TagsView: View {
                 }
             }
 
+            // Sub-tags always visible (no expand needed)
+            if let children = subTagsMap[tag.id], !children.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(children) { child in
+                        let childCount = itemCounts[child.id] ?? 0
+                        Button {
+                            appState.navigate(to: .tagDetail(child.id))
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "number")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(Theme.accent.opacity(0.7))
+                                Text(child.name)
+                                    .font(.inter(12, weight: .medium))
+                                    .foregroundStyle(Theme.textSecondary)
+                                Text("\(childCount) items")
+                                    .font(.inter(9))
+                                    .foregroundStyle(Theme.textMuted)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Theme.cardAlt, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 44)
+                    }
+                }
+                .padding(.top, 3)
+            }
+
             if isExpanded {
                 VStack(alignment: .leading, spacing: 4) {
-                    // Sub-tags
-                    if let children = subTagsMap[tag.id], !children.isEmpty {
-                        ForEach(children) { child in
-                            let childCount = itemCounts[child.id] ?? 0
-                            Button {
-                                appState.navigate(to: .tagDetail(child.id))
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "number")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(Theme.accent.opacity(0.7))
-                                    Text(child.name)
-                                        .font(.inter(12, weight: .medium))
-                                        .foregroundStyle(Theme.textSecondary)
-                                    Text("\(childCount) items")
-                                        .font(.inter(9))
-                                        .foregroundStyle(Theme.textMuted)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Theme.cardAlt, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.leading, 44)
-                        }
-                    }
-
                     // Items
                     if !items.isEmpty {
                         VStack(alignment: .leading, spacing: 3) {
@@ -342,6 +348,13 @@ struct TagsView: View {
         }
         tagBullets[tag.id] = bullets
         tagItems[tag.id] = (try? Queries.getItemsForTag(tagId: tag.id, done: nil)) ?? []
+    }
+
+    private func performMakeSubTag() {
+        guard let source = mergeSource, let target = mergeTarget else { return }
+        try? Queries.addSubTag(parentTagId: target.id, childTagId: source.id)
+        mergeSource = nil; mergeTarget = nil
+        reload()
     }
 
     private func performMerge() {
