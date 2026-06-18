@@ -39,6 +39,9 @@ struct ItemDetailPanel: View {
     @State private var addingTag = false
     @State private var newTagText = ""
     @State private var allTags: [Tag] = []
+    @State private var addingResource = false
+    @State private var newResourceURL = ""
+    @State private var newResourceTitle = ""
 
     var body: some View {
         if let item {
@@ -347,19 +350,114 @@ struct ItemDetailPanel: View {
 
     @ViewBuilder
     private var resourcesSection: some View {
-        if !linkedItems.isEmpty {
+        let isActionOrBrainstorm = item?.category == .action || item?.category == .brainstorm
+        if !linkedItems.isEmpty || isActionOrBrainstorm {
             VStack(alignment: .leading, spacing: 6) {
                 Text("LINKED").font(.inter(10, weight: .bold)).foregroundStyle(Theme.textMuted)
                 ForEach(linkedItems) { linked in
                     HStack(spacing: 8) {
                         CategoryBadge(category: linked.category)
-                        Text(linked.text).font(.inter(11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        if let url = linked.url, let link = URL(string: url) {
+                            SwiftUI.Link(destination: link) {
+                                Text(linked.urlTitle ?? linked.text)
+                                    .font(.inter(11, weight: .medium))
+                                    .foregroundStyle(Theme.resourceColor)
+                                    .lineLimit(1)
+                            }
+                        } else {
+                            Text(linked.text).font(.inter(11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        }
                         Spacer()
                     }
                     .padding(.vertical, 4)
                 }
+
+                if isActionOrBrainstorm {
+                    if addingResource {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "link").font(.system(size: 10)).foregroundStyle(Theme.textMuted)
+                                TextField("URL", text: $newResourceURL)
+                                    .font(.inter(11))
+                                    .textFieldStyle(.plain)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1))
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "text.cursor").font(.system(size: 10)).foregroundStyle(Theme.textMuted)
+                                TextField("Visible text", text: $newResourceTitle)
+                                    .font(.inter(11))
+                                    .textFieldStyle(.plain)
+                                    .onSubmit { commitNewResource() }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1))
+
+                            HStack(spacing: 8) {
+                                Button("Add") { commitNewResource() }
+                                    .font(.inter(11, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(Theme.resourceColor, in: Capsule())
+                                    .buttonStyle(.plain)
+
+                                Button("Cancel") {
+                                    addingResource = false
+                                    newResourceURL = ""
+                                    newResourceTitle = ""
+                                }
+                                .font(.inter(11))
+                                .foregroundStyle(Theme.textMuted)
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } else {
+                        Button {
+                            addingResource = true
+                            newResourceURL = ""
+                            newResourceTitle = ""
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 9, weight: .bold))
+                                Text("Add Resource")
+                                    .font(.inter(10, weight: .medium))
+                            }
+                            .foregroundStyle(Theme.resourceColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Theme.resourceColor.opacity(0.1), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
+    }
+
+    private func commitNewResource() {
+        let url = newResourceURL.trimmingCharacters(in: .whitespaces)
+        let title = newResourceTitle.trimmingCharacters(in: .whitespaces)
+        guard !url.isEmpty else { return }
+        let displayTitle = title.isEmpty ? url : title
+        let resource = Item.new(text: displayTitle, category: .resource, url: url, urlTitle: displayTitle.isEmpty ? nil : displayTitle)
+        try? Queries.addItem(resource)
+        let link = ItemLink.new(fromId: itemId, toId: resource.id)
+        try? Queries.addLink(link)
+        for tag in tags {
+            try? Queries.tagItem(itemId: resource.id, tagId: tag.id)
+        }
+        addingResource = false
+        newResourceURL = ""
+        newResourceTitle = ""
+        loadData()
+        appState.refreshCounts()
     }
 
     private func saveNotes() {
