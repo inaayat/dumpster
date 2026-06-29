@@ -30,6 +30,7 @@ struct DumpView: View {
     @State private var partialTag: String? = nil
     @State private var tagSuggestions: [String] = []
     @State private var showTagBar = false
+    @State private var aiError: String? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -37,6 +38,7 @@ struct DumpView: View {
                 VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     attentionBar
                     header
+                    if let error = aiError { errorBanner(error) }
                     dumpHints
                     magicTagsGuide
                     if showTagBar || searchTag != nil {
@@ -165,6 +167,28 @@ struct DumpView: View {
                 .disabled(isAnalyzing)
             }
         }
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.red)
+            Text(message)
+                .font(.inter(12))
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Button { aiError = nil } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Color.red.opacity(0.2), lineWidth: 1))
     }
 
     // MARK: - Hints
@@ -1035,6 +1059,7 @@ struct DumpView: View {
 
     private func analyze() {
         isAnalyzing = true
+        aiError = nil
         Task {
             do {
                 let result = try await AIService.analyzeDump(content: content)
@@ -1044,13 +1069,17 @@ struct DumpView: View {
                     isAnalyzing = false
                 }
             } catch {
-                await MainActor.run { isAnalyzing = false }
+                await MainActor.run {
+                    aiError = error.localizedDescription
+                    isAnalyzing = false
+                }
             }
         }
     }
 
     private func analyzePastDump(_ dump: DailyDump) {
         isAnalyzing = true
+        aiError = nil
         Task {
             do {
                 let result = try await AIService.analyzeDump(content: dump.content)
@@ -1060,7 +1089,10 @@ struct DumpView: View {
                     isAnalyzing = false
                 }
             } catch {
-                await MainActor.run { isAnalyzing = false }
+                await MainActor.run {
+                    aiError = error.localizedDescription
+                    isAnalyzing = false
+                }
             }
         }
     }

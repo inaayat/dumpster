@@ -2,18 +2,26 @@ import Foundation
 
 protocol AIBackend: Sendable {
     func send(system: String, userMessage: String, maxTokens: Int) async throws -> String
-    func isAvailable() async -> Bool
+    func checkAvailability() async throws
 }
 
 struct OllamaBackend: AIBackend {
     private let url = URL(string: "http://localhost:11434/api/chat")!
     private let model = "gemma3:9b"
 
-    func isAvailable() async -> Bool {
-        guard let tagURL = URL(string: "http://localhost:11434/api/tags") else { return false }
-        guard let (_, response) = try? await URLSession.shared.data(from: tagURL),
-              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
-        return true
+    func checkAvailability() async throws {
+        guard let tagURL = URL(string: "http://localhost:11434/api/tags") else {
+            throw AIError.unavailable
+        }
+        guard let (data, response) = try? await URLSession.shared.data(from: tagURL),
+              let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw AIError.unavailable
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = json["models"] as? [[String: Any]],
+              models.contains(where: { ($0["name"] as? String) == model }) else {
+            throw AIError.modelNotPulled(model)
+        }
     }
 
     func send(system: String, userMessage: String, maxTokens: Int) async throws -> String {
@@ -46,13 +54,15 @@ struct OllamaBackend: AIBackend {
 
 enum AIError: Error, LocalizedError {
     case unavailable
+    case modelNotPulled(String)
     case apiError(statusCode: Int, message: String)
     case emptyResponse
     case parseError
 
     var errorDescription: String? {
         switch self {
-        case .unavailable: return "AI not available. Start Ollama with: ollama serve"
+        case .unavailable: return "Ollama isn't running. Start it with: ollama serve"
+        case .modelNotPulled(let name): return "Model not found. Run: ollama pull \(name)"
         case .apiError(let code, let msg): return "API error (\(code)): \(msg)"
         case .emptyResponse: return "Empty response from AI"
         case .parseError: return "Failed to parse AI response"
@@ -66,11 +76,12 @@ struct AIClient: Sendable {
     private let backend: AIBackend = OllamaBackend()
 
     func isAvailable() async -> Bool {
-        await backend.isAvailable()
+        do { try await backend.checkAvailability(); return true }
+        catch { return false }
     }
 
     func send(system: String, userMessage: String, maxTokens: Int = 1024) async throws -> String {
-        guard await backend.isAvailable() else { throw AIError.unavailable }
+        try await backend.checkAvailability()
         return try await backend.send(system: system, userMessage: userMessage, maxTokens: maxTokens)
     }
 }
