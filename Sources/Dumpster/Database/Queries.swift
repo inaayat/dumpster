@@ -398,8 +398,16 @@ struct Queries {
         try db.write { db in try win.insert(db) }
     }
 
-    static func getAllWins() throws -> [Win] {
-        try db.read { db in try Win.order(Win.Columns.createdAt.desc).fetchAll(db) }
+    static func getAllWins(kind: String? = nil) throws -> [Win] {
+        try db.read { db in
+            var request = Win.order(Win.Columns.createdAt.desc)
+            if let kind { request = request.filter(Win.Columns.kind == kind) }
+            return try request.fetchAll(db)
+        }
+    }
+
+    static func updateWin(_ win: Win) throws {
+        try db.write { db in try win.update(db) }
     }
 
     static func deleteWin(id: String) throws {

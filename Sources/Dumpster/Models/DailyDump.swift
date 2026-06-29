@@ -76,6 +76,7 @@ enum MagicTag: String {
     case brainstorm
     case resource
     case win
+    case scenario
     case save
     case prio
     case backlog
@@ -124,7 +125,10 @@ enum MagicTagProcessor {
                 try? Queries.addItem(item)
                 try? Queries.tagItemWithNames(itemId: item.id, tagNames: bullet.tags)
             case .win:
-                let win = Win.new(text: cleanText)
+                let win = Win.new(text: cleanText, kind: "win")
+                try? Queries.addWin(win)
+            case .scenario:
+                let win = Win.new(text: cleanText, kind: "scenario")
                 try? Queries.addWin(win)
             case .save:
                 for tagName in bullet.tags {

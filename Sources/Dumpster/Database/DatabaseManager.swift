@@ -116,6 +116,13 @@ final class DatabaseManager: Sendable {
             }
         }
 
+        migrator.registerMigration("v4_winStarAndKind") { db in
+            try db.alter(table: "wins") { t in
+                t.add(column: "kind", .text).notNull().defaults(to: "win")
+                t.add(column: "star", .text)
+            }
+        }
+
         return migrator
     }
 }
