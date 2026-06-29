@@ -7,7 +7,7 @@ protocol AIBackend: Sendable {
 
 struct OllamaBackend: AIBackend {
     private let url = URL(string: "http://localhost:11434/api/chat")!
-    private let model = "gemma3:9b"
+    private let model = "gemma2:9b"
 
     func checkAvailability() async throws {
         guard let tagURL = URL(string: "http://localhost:11434/api/tags") else {
