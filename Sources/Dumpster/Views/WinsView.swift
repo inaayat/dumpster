@@ -13,6 +13,10 @@ struct WinsView: View {
     @State private var starT = ""
     @State private var starA = ""
     @State private var starR = ""
+    @State private var editTitleText = ""
+    @State private var pickerWinId: String?
+    @State private var itemSearchQuery = ""
+    @State private var completedItems: [Item] = []
 
     enum WinKind: String, CaseIterable {
         case all = "All"
@@ -135,7 +139,7 @@ struct WinsView: View {
     private func winCard(_ win: Win, item: Item?) -> some View {
         let isSelected = selectedWinId == win.id
         VStack(alignment: .leading, spacing: 0) {
-            // Card header — click to expand/collapse STAR
+            // Card header — click to expand/collapse
             Button {
                 if isSelected {
                     selectedWinId = nil
@@ -147,10 +151,20 @@ struct WinsView: View {
                     Image(systemName: win.kind == "scenario" ? "person.fill.questionmark" : "trophy.fill")
                         .foregroundStyle(win.kind == "scenario" ? Theme.accent : Theme.warnColor)
                         .font(.system(size: 12))
-                    Text(win.text)
-                        .font(.inter(13, weight: .medium))
-                        .foregroundStyle(Theme.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if isSelected {
+                        TextField("", text: $editTitleText)
+                            .font(.inter(13, weight: .medium))
+                            .foregroundStyle(Theme.textPrimary)
+                            .textFieldStyle(.plain)
+                            .onSubmit { saveTitle(for: win) }
+                            .onChange(of: editTitleText) { _, _ in saveTitle(for: win) }
+                    } else {
+                        Text(win.text)
+                            .font(.inter(13, weight: .medium))
+                            .foregroundStyle(Theme.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Spacer()
                     Text(win.createdAt.formatted(.dateTime.month(.abbreviated).day()))
                         .font(.inter(10)).foregroundStyle(Theme.textMuted)
                     Image(systemName: isSelected ? "chevron.up" : "chevron.down")
@@ -160,13 +174,7 @@ struct WinsView: View {
             }
             .buttonStyle(.plain)
 
-            if let item {
-                Text(item.text)
-                    .font(.inter(11)).foregroundStyle(Theme.textMuted).lineLimit(1)
-                    .padding(.horizontal, 12).padding(.bottom, 6)
-            }
-
-            if let artifact = win.artifact, let url = URL(string: artifact) {
+            if let artifact = win.artifact, let url = URL(string: artifact), !isSelected {
                 SwiftUI.Link(destination: url) {
                     HStack(spacing: 6) {
                         Image(systemName: "link").font(.system(size: 10)).foregroundStyle(Theme.resourceColor)
@@ -176,14 +184,61 @@ struct WinsView: View {
                 .padding(.horizontal, 12).padding(.bottom, 8)
             }
 
-            // STAR fields (expanded)
+            // Expanded content
             if isSelected {
                 Divider().padding(.horizontal, 12)
                 VStack(alignment: .leading, spacing: 10) {
+                    // STAR fields
                     starField(label: "S", title: "Situation", binding: $starS, win: win)
                     starField(label: "T", title: "Task", binding: $starT, win: win)
                     starField(label: "A", title: "Action", binding: $starA, win: win)
                     starField(label: "R", title: "Result", binding: $starR, win: win)
+
+                    Divider()
+
+                    // Linked item section
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Linked Item")
+                            .font(.inter(11, weight: .semibold))
+                            .foregroundStyle(Theme.textMuted)
+
+                        if let linkedItem = item {
+                            HStack(spacing: 8) {
+                                Image(systemName: linkedItem.category.icon)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Theme.textMuted)
+                                Text(linkedItem.text)
+                                    .font(.inter(12))
+                                    .foregroundStyle(Theme.textPrimary)
+                                    .lineLimit(1)
+                                Spacer()
+                                Button("Unlink") { unlinkItem(from: win) }
+                                    .font(.inter(11))
+                                    .foregroundStyle(Theme.textMuted)
+                                    .buttonStyle(.plain)
+                            }
+                        }
+
+                        Button {
+                            completedItems = (try? Queries.getAllItems(done: true)) ?? []
+                            itemSearchQuery = ""
+                            pickerWinId = win.id
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "link.badge.plus").font(.system(size: 11))
+                                Text(item == nil ? "Link Item" : "Change")
+                                    .font(.inter(11, weight: .medium))
+                            }
+                            .foregroundStyle(Theme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: Binding(
+                            get: { pickerWinId == win.id },
+                            set: { if !$0 { pickerWinId = nil; itemSearchQuery = "" } }
+                        )) {
+                            itemPickerPopover(for: win)
+                        }
+                    }
                 }
                 .padding(12)
             }
@@ -203,6 +258,63 @@ struct WinsView: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+    }
+
+    @ViewBuilder
+    private func itemPickerPopover(for win: Win) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TextField("Search completed items…", text: $itemSearchQuery)
+                .textFieldStyle(.roundedBorder)
+                .font(.inter(12))
+                .padding(12)
+
+            Divider()
+
+            let filtered = completedItems.filter { item in
+                itemSearchQuery.isEmpty ||
+                item.text.localizedCaseInsensitiveContains(itemSearchQuery)
+            }
+
+            if filtered.isEmpty {
+                Text("No completed items found")
+                    .font(.inter(12))
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(16)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(filtered) { item in
+                            Button {
+                                linkItem(item, to: win)
+                                pickerWinId = nil
+                                itemSearchQuery = ""
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: item.category.icon)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Theme.textMuted)
+                                        .frame(width: 16)
+                                    Text(item.text)
+                                        .font(.inter(12))
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .lineLimit(2)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .background(Theme.cardBg)
+                            Divider().padding(.leading, 36)
+                        }
+                    }
+                }
+                .frame(maxHeight: 280)
+            }
+        }
+        .frame(width: 320)
+        .background(Theme.canvas)
     }
 
     @ViewBuilder
@@ -231,8 +343,19 @@ struct WinsView: View {
 
     private func selectWin(_ win: Win) {
         selectedWinId = win.id
+        editTitleText = win.text
         let fields = StarFields.from(win.star)
         starS = fields.s; starT = fields.t; starA = fields.a; starR = fields.r
+    }
+
+    private func saveTitle(for win: Win) {
+        let trimmed = editTitleText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != win.text else { return }
+        guard let idx = wins.firstIndex(where: { $0.win.id == win.id }) else { return }
+        var updated = wins[idx].win
+        updated.text = trimmed
+        try? Queries.updateWin(updated)
+        wins[idx] = (win: updated, item: wins[idx].item)
     }
 
     private func saveSTAR(for win: Win) {
@@ -242,6 +365,22 @@ struct WinsView: View {
         updated.star = fields.toJSON()
         try? Queries.updateWin(updated)
         wins[idx] = (win: updated, item: wins[idx].item)
+    }
+
+    private func linkItem(_ item: Item, to win: Win) {
+        guard let idx = wins.firstIndex(where: { $0.win.id == win.id }) else { return }
+        var updated = wins[idx].win
+        updated.itemId = item.id
+        try? Queries.updateWin(updated)
+        wins[idx] = (win: updated, item: item)
+    }
+
+    private func unlinkItem(from win: Win) {
+        guard let idx = wins.firstIndex(where: { $0.win.id == win.id }) else { return }
+        var updated = wins[idx].win
+        updated.itemId = nil
+        try? Queries.updateWin(updated)
+        wins[idx] = (win: updated, item: nil)
     }
 
     private func saveEntry() {
