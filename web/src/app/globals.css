@@ -1,0 +1,60 @@
+@import 'tailwindcss';
+
+/* Dumpster design tokens — ported from the iOS/macOS Theme.swift so the
+   web app reads as the same product. */
+@theme {
+  --color-canvas: #f5f3f0;
+  --color-card: #ffffff;
+  --color-card-alt: #f0efed;
+  --color-sidebar: #2d2d2d;
+
+  --color-ink: #1a1a1a;
+  --color-ink-secondary: #3a3a3a;
+  --color-ink-muted: #8a8a8a;
+
+  --color-edge: #e5e3e0;
+
+  --color-action: #f15a24;
+  --color-action-tint: #fddccc;
+  --color-brainstorm: #2d8a7e;
+  --color-brainstorm-tint: #d0f0ec;
+  --color-resource: #7b68ee;
+  --color-resource-tint: #e0dbfc;
+
+  --color-accent: #3ba99c;
+  --color-accent-tint: #c5e8e4;
+  --color-warn: #f7941d;
+  --color-win: #c9a227;
+  --color-danger: #b05858;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html {
+  background: var(--color-canvas);
+}
+
+body {
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Inline magic-tag colors used by the dump editor overlay. */
+.tag-action { color: var(--color-action); font-weight: 600; }
+.tag-prio { color: var(--color-warn); font-weight: 600; }
+.tag-brainstorm { color: var(--color-brainstorm); font-weight: 600; }
+.tag-win { color: var(--color-win); font-weight: 600; }
+.tag-save { color: var(--color-resource); font-weight: 600; }
+.tag-resource { color: var(--color-resource); font-weight: 600; }
+.tag-delete { color: var(--color-ink-muted); font-weight: 600; text-decoration: line-through; }
+.tag-backlog { color: var(--color-ink-muted); font-weight: 600; }
+.tag-topic { color: var(--color-accent); font-weight: 600; }
+
+/* Give iOS-style momentum scrolling and stop pull-to-refresh from fighting
+   the dump editor on mobile. */
+@media (max-width: 768px) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
