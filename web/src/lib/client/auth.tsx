@@ -33,7 +33,7 @@ interface AuthContextValue {
   status: Status;
   user: SessionUser | null;
   getToken: () => Promise<string | null>;
-  signIn: (email: string, password: string) => Promise<string | null>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<string | null>;
   signUp: (name: string, email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 }
@@ -113,9 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [neonAuth]);
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, rememberMe = true) => {
       if (!neonAuth) return 'Auth not ready.';
-      const { error } = await neonAuth.adapter.signIn.email({ email, password });
+      const { error } = await neonAuth.adapter.signIn.email({ email, password, rememberMe });
       if (error) return error.message || 'Sign-in failed.';
       await refreshSession();
       return null;
