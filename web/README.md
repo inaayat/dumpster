@@ -73,8 +73,14 @@ web/
 
 ## Deploy (Vercel)
 
+This folder sits alongside the native macOS app (repo root); Vercel only
+cares about `web/` and skips builds for commits that don't touch it
+(`ignoreCommand` in `vercel.json`).
+
 1. **New Vercel project** → import `inaayat/dumpster`, set
-   **Root Directory** to `web/`. Framework auto-detects as Next.js.
+   **Root Directory** to `web/`. Framework auto-detects as Next.js. Every
+   push to the production branch then auto-deploys; other branches get
+   preview URLs.
 2. **Environment variables** (same values as the inaayat.xyz project):
    - `DATABASE_URL` — the Neon Postgres connection string
    - `NEON_AUTH_BASE_URL` — the Neon Auth service URL
