@@ -6,6 +6,16 @@ curl -fsSL https://raw.githubusercontent.com/inaayat/dumpster/main/install.sh | 
 
 A native macOS app for dumping your thoughts and turning them into organized work. Playful, fast, local-first.
 
+> **This repo now holds two apps side by side.** The native macOS app lives at
+> the repo root (everything documented below — unchanged). The web rebuild — a
+> Next.js PWA behind the inaayat.xyz user accounts, deployed to
+> [dumpster.inaayat.xyz](https://dumpster.inaayat.xyz) — lives in
+> [`web/`](web/README.md). The iOS app remains in its own repo,
+> [dumpsteriOS](https://github.com/inaayat/dumpsteriOS). Vercel deploys the
+> web app automatically from `web/` (Root Directory setting on the Vercel
+> project); pushes that only touch Swift code still trigger no-op builds you
+> can skip with the project's Ignored Build Step if desired.
+
 ---
 
 ## How It Works
