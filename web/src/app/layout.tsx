@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from '@/lib/client/auth';
 import AppShell from '@/components/AppShell';
 import ServiceWorker from '@/components/ServiceWorker';
+import { Analytics } from '@vercel/analytics/next';
 
 const inter = localFont({
   src: [
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AppShell>{children}</AppShell>
         </AuthProvider>
         <ServiceWorker />
+        <Analytics />
       </body>
     </html>
   );
