@@ -70,7 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let url: string | null = null;
       try {
         const res = await fetch('/api/auth-config');
-        url = (await res.json()).url;
+        const configuredUrl = (await res.json()).url;
+        // /api/auth-config hands back a same-origin path (e.g. /api/auth)
+        // so the session cookie is first-party; the Better Auth client
+        // requires an absolute URL, so resolve it against our own origin.
+        url = configuredUrl ? new URL(configuredUrl, window.location.origin).toString() : null;
       } catch {
         // fall through to unconfigured
       }
