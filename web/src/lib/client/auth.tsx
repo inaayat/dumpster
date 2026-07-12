@@ -1,9 +1,11 @@
 'use client';
 
 // Neon Auth for the browser. Same accounts as inaayat.xyz: the client
-// talks to the hosted Neon Auth service directly (URL comes from
-// /api/auth-config at runtime) and holds a session; API calls attach a
-// short-lived JWT via getToken().
+// talks to Neon Auth through our own /api/auth proxy (path comes from
+// /api/auth-config at runtime, see api/auth/[...path] — this keeps the
+// session cookie first-party so it survives Safari/iOS PWA third-party
+// cookie blocking) and holds a session; API calls attach a short-lived
+// JWT via getToken().
 import {
   createContext,
   useCallback,
