@@ -8,8 +8,20 @@ import { NextRequest, NextResponse } from 'next/server';
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 function jwks() {
-  if (!_jwks) _jwks = createRemoteJWKSet(new URL('/jwks', process.env.NEON_AUTH_BASE_URL));
+  if (!_jwks) {
+    const base = process.env.NEON_AUTH_BASE_URL!;
+    _jwks = createRemoteJWKSet(new URL('.well-known/jwks.json', base.endsWith('/') ? base : `${base}/`));
+  }
   return _jwks;
+}
+
+// Neon Auth signs JWTs with `iss`/`aud` set to the auth service's own
+// origin (no path) — its Better Auth `baseURL` doesn't know about the
+// `/neondb/auth` prefix our routing adds. The JWKS endpoint, by contrast,
+// only resolves under that prefixed path. Same base URL, two different
+// shapes needed.
+function authOrigin(): string {
+  return new URL(process.env.NEON_AUTH_BASE_URL!).origin;
 }
 
 export interface AuthUser {
@@ -24,8 +36,8 @@ export async function getAuth(req: NextRequest): Promise<AuthUser | null> {
   if (!token || !process.env.NEON_AUTH_BASE_URL) return null;
   try {
     const { payload } = await jwtVerify(token, jwks(), {
-      issuer: process.env.NEON_AUTH_BASE_URL,
-      audience: process.env.NEON_AUTH_BASE_URL,
+      issuer: authOrigin(),
+      audience: authOrigin(),
     });
     if (!payload.sub) return null;
     return {
