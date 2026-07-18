@@ -23,7 +23,7 @@ function isActive(pathname: string, href: string) {
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user, signOut } = useAuth();
   const pathname = usePathname();
 
   // The offline fallback renders without chrome so it can be precached.
@@ -81,33 +81,63 @@ export default function AppShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
+          <div className="mt-auto border-t border-white/10 px-2 pt-4">
+            {user?.email && (
+              <p className="mb-2 truncate text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                {user.email}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={signOut}
+              className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-white/10"
+              style={{ color: 'rgba(255,255,255,0.7)' }}
+            >
+              Log out
+            </button>
+          </div>
         </aside>
 
         {/* Content */}
-        <main className="min-w-0 flex-1 pb-20 md:pb-8">{children}</main>
+        <main className="min-w-0 flex-1 pb-28 md:pb-8">{children}</main>
 
         {/* Mobile bottom tabs */}
-        <nav
-          className="fixed bottom-0 left-0 right-0 z-40 flex justify-around border-t border-edge py-1 md:hidden"
-          style={{
-            background: 'var(--color-card)',
-            paddingBottom: 'max(env(safe-area-inset-bottom), 4px)',
-          }}
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 md:hidden"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 4px)' }}
         >
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium"
-              style={{
-                color: isActive(pathname, item.href) ? 'var(--color-accent)' : 'var(--color-ink-muted)',
-              }}
+          <div
+            className="flex items-center justify-end border-t border-edge px-4 py-1.5"
+            style={{ background: 'var(--color-card)' }}
+          >
+            <button
+              type="button"
+              onClick={signOut}
+              className="text-xs font-semibold"
+              style={{ color: 'var(--color-danger)' }}
             >
-              <span className="text-base leading-none">{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+              Log out
+            </button>
+          </div>
+          <nav
+            className="flex justify-around border-t border-edge py-1"
+            style={{ background: 'var(--color-card)' }}
+          >
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium"
+                style={{
+                  color: isActive(pathname, item.href) ? 'var(--color-accent)' : 'var(--color-ink-muted)',
+                }}
+              >
+                <span className="text-base leading-none">{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </div>
     </ToastProvider>
   );

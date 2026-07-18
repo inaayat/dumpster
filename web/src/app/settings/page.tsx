@@ -66,7 +66,7 @@ export default function SettingsPage() {
           className="mt-3 rounded-lg border border-edge px-3 py-1.5 text-xs font-semibold"
           style={{ color: 'var(--color-danger)' }}
         >
-          Sign out
+          Log out
         </button>
       </section>
 
